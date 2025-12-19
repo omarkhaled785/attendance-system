@@ -7,8 +7,7 @@ export default defineConfig({
   root: path.resolve(__dirname, 'frontend'),
   base: './', // ← مهم جداً للـ Electron - يجعل المسارات نسبية
   build: {
-    outDir: path.resolve(__dirname, 'dist'), // ← المخرجات في مجلد dist في الجذر
-    emptyOutDir: true,
+    outDir: path.resolve(__dirname, 'frontend/dist'), // ✅ هنا    emptyOutDir: true,
     rollupOptions: {
       output: {
         manualChunks: undefined
