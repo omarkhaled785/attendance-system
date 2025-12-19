@@ -203,9 +203,12 @@ function Workers() {
           🔄 إعادة تعيين بيانات اليوم
         </button>
         
-        <a href="/dashboard" className="admin-link">
-          دخول لوحة التحكم (أدمن)
-        </a>
+        <button 
+          onClick={() => navigate('/dashboard')} 
+          className="admin-link"
+        >
+          👨‍💼 دخول لوحة التحكم (أدمن)
+        </button>
       </div>
     </div>
   );
