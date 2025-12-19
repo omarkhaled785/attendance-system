@@ -1,0 +1,97 @@
+{
+  "name": "attendance-system",
+  "version": "1.0.0",
+  "description": "نظام حضور وانصراف للعمال - كامل ومتكامل",
+  "author": "Your Company Name",
+  "main": "electron/main.js",
+  "homepage": ".",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "node backend/server.js",
+    "dev:frontend": "vite",
+    "build:frontend": "vite build",
+    "build:electron": "npm run build:frontend && electron-builder",
+    "build:win": "npm run build:frontend && electron-builder --win --x64",
+    "build:linux": "npm run build:frontend && electron-builder --linux",
+    "build:mac": "npm run build:frontend && electron-builder --mac",
+    "electron": "electron .",
+    "electron:dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"wait-on http://localhost:5173 && electron .\"",
+    "dist": "npm run build:frontend && electron-builder"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "better-sqlite3": "^9.2.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.0",
+    "vite": "^5.0.0",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "concurrently": "^8.2.2",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.attendance.system",
+    "productName": "نظام الحضور والانصراف",
+    "copyright": "Copyright © 2024 ${author}",
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "build"
+    },
+    "files": [
+      "backend/**/*",
+      "dist/**/*",
+      "electron/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "attendance.db",
+        "to": "attendance.db",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "icon.ico"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "icon.png",
+      "category": "Office",
+      "maintainer": "your-email@example.com"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "icon.icns",
+      "category": "public.app-category.business"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "نظام الحضور والانصراف",
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "installerHeader": "icon.ico",
+      "deleteAppDataOnUninstall": false,
+      "language": "1025",
+      "displayLanguageSelector": false
+    },
+    "deb": {
+      "depends": ["libgtk-3-0", "libnotify4", "libnss3", "libxtst6", "xdg-utils"]
+    }
+  }
+}
