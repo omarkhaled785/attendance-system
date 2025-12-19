@@ -30,6 +30,7 @@ function createWindow() {
     mainWindow.loadFile(
       path.join(__dirname, '../frontend/dist/index.html')
     );
+      mainWindow.webContents.openDevTools(); // <-- Add this
   }
 
   mainWindow.on('closed', function () {

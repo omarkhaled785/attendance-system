@@ -35,37 +35,50 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.attendance.system",
-    "productName": "نظام الحضور والانصراف",
-    "directories": {
-      "output": "dist-electron",
-      "buildResources": "build"
+  "appId": "com.attendance.system",
+  "productName": "نظام الحضور والانصراف",
+  "asar": true,
+
+  "asarUnpack": [
+    "frontend/dist/**/*",
+    "backend/**/*"
+  ],
+
+  "directories": {
+    "output": "dist-electron",
+    "buildResources": "build"
+  },
+
+  "files": [
+    "electron/**/*",
+    "backend/**/*",
+    "frontend/dist/**/*",
+    "node_modules/**/*",
+    "package.json"
+  ],
+
+  "extraResources": [
+    {
+      "from": "frontend/dist",
+      "to": "frontend/dist"
     },
+    {
+      "from": "attendance.db",
+      "to": "attendance.db"
+    }
+  ],
 
-    "files": [
-      "backend/**/*",
-      "electron/**/*",
-      "frontend/dist/**/*",
-      "node_modules/**/*",
-      "package.json"
-    ],
-
-    "extraResources": [
+  "win": {
+    "target": [
       {
-        "from": "attendance.db",
-        "to": "attendance.db"
+        "target": "nsis",
+        "arch": ["x64"]
       }
     ],
+    "icon": "icon.ico"
+  }
 
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": ["x64"]
-        }
-      ],
-      "icon": "icon.ico"
-    },
+,
 
     "linux": {
       "target": ["AppImage", "deb"],
