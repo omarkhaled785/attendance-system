@@ -5,7 +5,7 @@ const { spawn } = require('child_process');
 let mainWindow;
 let serverProcess;
 
-// Check if we're in development or production
+// Check environment
 const isDev = !app.isPackaged;
 
 function createWindow() {
@@ -21,13 +21,15 @@ function createWindow() {
     title: 'نظام الحضور والانصراف'
   });
 
-  // في Development
   if (isDev) {
+    // Development mode → load Vite server
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    // في Production - تحديث المسار
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    // Production mode → load built frontend
+    mainWindow.loadFile(
+      path.join(__dirname, '../frontend/dist/index.html')
+    );
   }
 
   mainWindow.on('closed', function () {
@@ -36,9 +38,7 @@ function createWindow() {
 }
 
 function startBackendServer() {
-  const serverPath = isDev 
-    ? path.join(__dirname, '../backend/server.js')
-    : path.join(__dirname, '../backend/server.js');
+  const serverPath = path.join(__dirname, '../backend/server.js');
 
   console.log('Starting backend server from:', serverPath);
   console.log('isDev:', isDev);
@@ -49,7 +49,7 @@ function startBackendServer() {
     env: { 
       ...process.env, 
       NODE_ENV: isDev ? 'development' : 'production',
-      USER_DATA_PATH: app.getPath('userData') // إرسال مسار البيانات للسيرفر
+      USER_DATA_PATH: app.getPath('userData')
     }
   });
 
@@ -64,8 +64,8 @@ function startBackendServer() {
 
 app.on('ready', () => {
   startBackendServer();
-  
-  // انتظر 2 ثانية حتى يبدأ السيرفر
+
+  // Give backend 2 seconds to start
   setTimeout(createWindow, 2000);
 });
 

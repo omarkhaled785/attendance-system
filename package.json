@@ -37,25 +37,26 @@
   "build": {
     "appId": "com.attendance.system",
     "productName": "نظام الحضور والانصراف",
-    "copyright": "Copyright © 2024 ${author}",
     "directories": {
       "output": "dist-electron",
       "buildResources": "build"
     },
+
     "files": [
       "backend/**/*",
-      "dist/**/*",
       "electron/**/*",
+      "frontend/dist/**/*",
       "node_modules/**/*",
       "package.json"
     ],
+
     "extraResources": [
       {
         "from": "attendance.db",
-        "to": "attendance.db",
-        "filter": ["**/*"]
+        "to": "attendance.db"
       }
     ],
+
     "win": {
       "target": [
         {
@@ -65,17 +66,19 @@
       ],
       "icon": "icon.ico"
     },
+
     "linux": {
       "target": ["AppImage", "deb"],
       "icon": "icon.png",
-      "category": "Office",
-      "maintainer": "your-email@example.com"
+      "category": "Office"
     },
+
     "mac": {
       "target": ["dmg"],
       "icon": "icon.icns",
       "category": "public.app-category.business"
     },
+
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
@@ -85,13 +88,18 @@
       "shortcutName": "نظام الحضور والانصراف",
       "installerIcon": "icon.ico",
       "uninstallerIcon": "icon.ico",
-      "installerHeader": "icon.ico",
-      "deleteAppDataOnUninstall": false,
       "language": "1025",
       "displayLanguageSelector": false
     },
+
     "deb": {
-      "depends": ["libgtk-3-0", "libnotify4", "libnss3", "libxtst6", "xdg-utils"]
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxtst6",
+        "xdg-utils"
+      ]
     }
   }
 }
