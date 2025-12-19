@@ -39,35 +39,35 @@ function createWindow() {
 }
 
 function startBackendServer() {
-  const serverPath = path.join(__dirname, '../backend/server.js');
+  return new Promise((resolve, reject) => {
+    const serverPath = path.join(__dirname, '../backend/server.js');
 
-  console.log('Starting backend server from:', serverPath);
-  console.log('isDev:', isDev);
-  console.log('userData path:', app.getPath('userData'));
+    serverProcess = spawn('node', [serverPath], {
+      stdio: 'inherit',
+      env: { 
+        ...process.env, 
+        NODE_ENV: isDev ? 'development' : 'production',
+        USER_DATA_PATH: app.getPath('userData')
+      }
+    });
 
-  serverProcess = spawn('node', [serverPath], {
-    stdio: 'inherit',
-    env: { 
-      ...process.env, 
-      NODE_ENV: isDev ? 'development' : 'production',
-      USER_DATA_PATH: app.getPath('userData')
-    }
-  });
+    serverProcess.on('error', reject);
 
-  serverProcess.on('error', (error) => {
-    console.error('Failed to start backend server:', error);
-  });
+    // انتظر السيرفر يطبع رسالة التشغيل
+    serverProcess.stdout?.on('data', (data) => {
+      if (data.toString().includes('Server running')) {
+        resolve();
+      }
+    });
 
-  serverProcess.on('close', (code) => {
-    console.log(`Backend server exited with code ${code}`);
+    // fallback أمان
+    setTimeout(resolve, 4000);
   });
 }
 
-app.on('ready', () => {
-  startBackendServer();
-
-  // Give backend 2 seconds to start
-  setTimeout(createWindow, 2000);
+app.on('ready', async () => {
+  await startBackendServer();
+  createWindow();
 });
 
 app.on('window-all-closed', function () {
