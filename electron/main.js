@@ -85,7 +85,7 @@ function startBackendServer() {
       serverPath = path.join(__dirname, '../backend/server.js');
     } else {
       // في production، الملفات موجودة في resources/app.asar أو resources/app
-      serverPath = path.join(process.resourcesPath, 'app/backend/server.js');
+serverPath = path.join(app.getAppPath(), 'backend/server.js');
       
       // إذا لم يكن موجود، جرب مسار آخر
       if (!fs.existsSync(serverPath)) {
@@ -138,11 +138,11 @@ function startBackendServer() {
 
     // Fallback - إذا لم يبدأ السيرفر خلال 5 ثواني، نفترض أنه بدأ
     setTimeout(() => {
-      if (!serverStarted) {
-        console.log('⚠️ Server start timeout - assuming it started');
-        resolve();
-      }
-    }, 5000);
+  if (!serverStarted) {
+    reject(new Error('Backend failed to start'));
+  }
+}, 5000);
+
   });
 }
 

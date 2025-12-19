@@ -40,8 +40,7 @@
   "asar": true,
 
   "asarUnpack": [
-    "frontend/dist/**/*",
-    "backend/**/*"
+    "**/node_modules/better-sqlite3/**"
   ],
 
   "directories": {

@@ -1,8 +1,8 @@
-// ملف تكوين API URL
-// هذا الملف يحدد URL الصحيح للـ API بناءً على البيئة
+// frontend/src/config.js
+const isElectron = window.navigator.userAgent.includes('Electron');
 
-const API_URL = import.meta.env.PROD 
-  ? 'http://localhost:3001/api'  // في production (Electron)
-  : 'http://localhost:3001/api'; // في development
+const API_URL = isElectron
+  ? 'http://localhost:3001/api'
+  : 'http://localhost:3001/api';
 
 export default API_URL;
