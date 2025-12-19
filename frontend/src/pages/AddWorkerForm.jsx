@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import './AddWorkerForm.css';
 
-const API_URL = 'http://localhost:3001/api';
-
+import API_URL from '../config';
 function AddWorkerForm({ onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     name: '',

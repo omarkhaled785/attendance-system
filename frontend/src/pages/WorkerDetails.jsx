@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import './WorkerDetails.css';
 
-const API_URL = 'http://localhost:3001/api';
-
+import API_URL from '../config';
 function WorkerDetails() {
   const { id } = useParams();
   const navigate = useNavigate();

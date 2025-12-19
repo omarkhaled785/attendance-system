@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import AddWorkerForm from './AddWorkerForm';
 import './Dashboard.css';
 
-const API_URL = 'http://localhost:3001/api';
-
+import API_URL from '../config';
 function Dashboard() {
   const navigate = useNavigate();
   const [isAuthenticated, setIsAuthenticated] = useState(false);

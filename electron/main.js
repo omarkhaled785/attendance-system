@@ -1,12 +1,29 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+const fs = require('fs');
 
 let mainWindow;
 let serverProcess;
 
 // Check environment
 const isDev = !app.isPackaged;
+
+// إنشاء مجلد البيانات
+function ensureUserDataPath() {
+  const userDataPath = app.getPath('userData');
+  
+  // إنشاء مجلد backups
+  const backupsPath = path.join(userDataPath, 'backups');
+  if (!fs.existsSync(backupsPath)) {
+    fs.mkdirSync(backupsPath, { recursive: true });
+  }
+  
+  console.log('✅ User Data Path:', userDataPath);
+  console.log('✅ Backups Path:', backupsPath);
+  
+  return userDataPath;
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -21,59 +38,143 @@ function createWindow() {
     title: 'نظام الحضور والانصراف'
   });
 
+  // إخفاء القائمة العلوية
+  mainWindow.setMenuBarVisibility(false);
+
   if (isDev) {
     // Development mode → load Vite server
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
     // Production mode → load built frontend
-    mainWindow.loadFile(
-      path.join(__dirname, '../frontend/dist/index.html')
-    );
-      mainWindow.webContents.openDevTools(); // <-- Add this
+    const indexPath = path.join(__dirname, '../frontend/dist/index.html');
+    
+    console.log('📂 Loading index.html from:', indexPath);
+    console.log('📂 File exists?', fs.existsSync(indexPath));
+    
+    mainWindow.loadFile(indexPath).catch(err => {
+      console.error('❌ Failed to load index.html:', err);
+    });
+    
+    // فتح DevTools فقط في حالة حدوث خطأ
+    mainWindow.webContents.on('did-fail-load', () => {
+      mainWindow.webContents.openDevTools();
+    });
   }
 
   mainWindow.on('closed', function () {
     mainWindow = null;
   });
+
+  // معالجة الأخطاء
+  mainWindow.webContents.on('crashed', () => {
+    console.error('❌ Window crashed!');
+  });
+
+  mainWindow.webContents.on('unresponsive', () => {
+    console.error('❌ Window unresponsive!');
+  });
 }
 
 function startBackendServer() {
   return new Promise((resolve, reject) => {
-    const serverPath = path.join(__dirname, '../backend/server.js');
-
+    const userDataPath = ensureUserDataPath();
+    
+    let serverPath;
+    if (isDev) {
+      serverPath = path.join(__dirname, '../backend/server.js');
+    } else {
+      // في production، الملفات موجودة في resources/app.asar أو resources/app
+      serverPath = path.join(process.resourcesPath, 'app/backend/server.js');
+      
+      // إذا لم يكن موجود، جرب مسار آخر
+      if (!fs.existsSync(serverPath)) {
+        serverPath = path.join(__dirname, '../backend/server.js');
+      }
+    }
+    
+    console.log('🚀 Starting backend server...');
+    console.log('📂 Server path:', serverPath);
+    console.log('📂 Server exists?', fs.existsSync(serverPath));
+    
+    // تحديد منفذ ديناميكي (للتأكد من عدم التعارض)
+    const PORT = 3001;
+    
     serverProcess = spawn('node', [serverPath], {
-      stdio: 'inherit',
+      stdio: ['ignore', 'pipe', 'pipe'], // تغيير من inherit لـ pipe
       env: { 
         ...process.env, 
         NODE_ENV: isDev ? 'development' : 'production',
-        USER_DATA_PATH: app.getPath('userData')
+        USER_DATA_PATH: userDataPath,
+        PORT: PORT
       }
     });
 
-    serverProcess.on('error', reject);
+    let serverStarted = false;
 
-    // انتظر السيرفر يطبع رسالة التشغيل
     serverProcess.stdout?.on('data', (data) => {
-      if (data.toString().includes('Server running')) {
+      const message = data.toString();
+      console.log('[SERVER]', message);
+      
+      if (message.includes('Server running') && !serverStarted) {
+        serverStarted = true;
+        console.log('✅ Backend server started successfully!');
         resolve();
       }
     });
 
-    // fallback أمان
-    setTimeout(resolve, 4000);
+    serverProcess.stderr?.on('data', (data) => {
+      console.error('[SERVER ERROR]', data.toString());
+    });
+
+    serverProcess.on('error', (err) => {
+      console.error('❌ Failed to start server:', err);
+      reject(err);
+    });
+
+    serverProcess.on('exit', (code) => {
+      console.log(`❌ Server exited with code ${code}`);
+    });
+
+    // Fallback - إذا لم يبدأ السيرفر خلال 5 ثواني، نفترض أنه بدأ
+    setTimeout(() => {
+      if (!serverStarted) {
+        console.log('⚠️ Server start timeout - assuming it started');
+        resolve();
+      }
+    }, 5000);
   });
 }
 
 app.on('ready', async () => {
-  await startBackendServer();
-  createWindow();
+  console.log('🚀 App is ready');
+  console.log('📦 Is packaged?', app.isPackaged);
+  console.log('📂 App path:', app.getAppPath());
+  console.log('📂 Resources path:', process.resourcesPath);
+  console.log('📂 User data path:', app.getPath('userData'));
+  
+  try {
+    await startBackendServer();
+    createWindow();
+  } catch (error) {
+    console.error('❌ Failed to start app:', error);
+    app.quit();
+  }
 });
 
 app.on('window-all-closed', function () {
   if (serverProcess) {
-    serverProcess.kill();
+    console.log('🛑 Killing server process...');
+    serverProcess.kill('SIGTERM');
+    
+    // إجبار القتل بعد 2 ثانية
+    setTimeout(() => {
+      if (serverProcess && !serverProcess.killed) {
+        serverProcess.kill('SIGKILL');
+      }
+    }, 2000);
   }
+  
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -87,6 +188,16 @@ app.on('activate', function () {
 
 app.on('quit', () => {
   if (serverProcess) {
-    serverProcess.kill();
+    console.log('🛑 Quitting - killing server...');
+    serverProcess.kill('SIGKILL');
   }
+});
+
+// معالجة الأخطاء غير المتوقعة
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });

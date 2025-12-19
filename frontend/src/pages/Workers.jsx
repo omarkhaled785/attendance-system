@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Workers.css';
 
-const API_URL = 'http://localhost:3001/api';
-
+import API_URL from '../config';
 function Workers() {
   const navigate = useNavigate();
   const [workers, setWorkers] = useState([]);
