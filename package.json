@@ -34,50 +34,55 @@
     "concurrently": "^8.2.2",
     "wait-on": "^7.2.0"
   },
+
   "build": {
-  "appId": "com.attendance.system",
-  "productName": "نظام الحضور والانصراف",
-  "asar": true,
+    "appId": "com.attendance.system",
+    "productName": "نظام الحضور والانصراف",
 
-  "asarUnpack": [
-    "**/node_modules/better-sqlite3/**"
-  ],
+    "asar": true,
 
-  "directories": {
-    "output": "dist-electron",
-    "buildResources": "build"
-  },
+    "asarUnpack": [
+      "backend/**",
+      "**/node_modules/better-sqlite3/**"
+    ],
 
-  "files": [
-    "electron/**/*",
-    "backend/**/*",
-    "frontend/dist/**/*",
-    "node_modules/**/*",
-    "package.json"
-  ],
-
-  "extraResources": [
-    {
-      "from": "frontend/dist",
-      "to": "frontend/dist"
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "build"
     },
-    {
-      "from": "attendance.db",
-      "to": "attendance.db"
-    }
-  ],
 
-  "win": {
-    "target": [
+    "files": [
+      "electron/**/*",
+      "backend/**/*",
+      "frontend/dist/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+
+    "extraResources": [
       {
-        "target": "nsis",
-        "arch": ["x64"]
+        "from": "backend",
+        "to": "backend"
+      },
+      {
+        "from": "frontend/dist",
+        "to": "frontend/dist"
+      },
+      {
+        "from": "attendance.db",
+        "to": "attendance.db"
       }
     ],
-    "icon": "icon.ico"
-  }
 
-,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "icon.ico"
+    },
 
     "linux": {
       "target": ["AppImage", "deb"],
