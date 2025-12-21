@@ -4,17 +4,16 @@ const fs = require('fs');
 
 // تحديد مسار قاعدة البيانات بناءً على البيئة
 function getDatabasePath() {
-  // إذا كان هناك مسار مخصص من Electron
-  if (process.env.USER_DATA_PATH) {
-    const dbDir = process.env.USER_DATA_PATH;
-    // التأكد من وجود المجلد
+  const customPath = process.env.USER_DATA_PATH;
+  if (customPath) {
+    const dbDir = customPath;
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });
     }
-    return path.join(dbDir, 'attendance.db');
+    const finalPath = path.join(dbDir, 'attendance.db');
+    console.log('PROD DB PATH:', finalPath);
+    return finalPath;
   }
-  
-  // في حالة Development
   return path.join(__dirname, '../attendance.db');
 }
 

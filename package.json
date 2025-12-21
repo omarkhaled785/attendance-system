@@ -34,68 +34,38 @@
     "concurrently": "^8.2.2",
     "wait-on": "^7.2.0"
   },
-
   "build": {
     "appId": "com.attendance.system",
     "productName": "نظام الحضور والانصراف",
-
     "asar": true,
-
     "asarUnpack": [
       "backend/**",
-      "**/node_modules/better-sqlite3/**"
+      "node_modules/better-sqlite3/**"
     ],
-
     "directories": {
       "output": "dist-electron",
       "buildResources": "build"
     },
-
     "files": [
       "electron/**/*",
       "backend/**/*",
       "frontend/dist/**/*",
       "node_modules/**/*",
-      "package.json"
+      "package.json",
+      "icon.png",
+      "icon.ico"
     ],
-
-    "extraResources": [
-      {
-        "from": "backend",
-        "to": "backend"
-      },
-      {
-        "from": "frontend/dist",
-        "to": "frontend/dist"
-      },
-      {
-        "from": "attendance.db",
-        "to": "attendance.db"
-      }
-    ],
-
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "icon.ico"
     },
-
-    "linux": {
-      "target": ["AppImage", "deb"],
-      "icon": "icon.png",
-      "category": "Office"
-    },
-
-    "mac": {
-      "target": ["dmg"],
-      "icon": "icon.icns",
-      "category": "public.app-category.business"
-    },
-
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
@@ -108,15 +78,20 @@
       "language": "1025",
       "displayLanguageSelector": false
     },
-
-    "deb": {
-      "depends": [
-        "libgtk-3-0",
-        "libnotify4",
-        "libnss3",
-        "libxtst6",
-        "xdg-utils"
-      ]
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "icon.png",
+      "category": "Office"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "icon.icns",
+      "category": "public.app-category.business"
     }
   }
 }

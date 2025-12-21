@@ -82,31 +82,39 @@ function startBackendServer() {
     
     let serverPath;
     if (isDev) {
-      console.log("⚠️ Dev mode: backend is already running. Skipping startBackendServer()");
+      console.log("⚠️ Dev mode: backend is already running via concurrently.");
       return resolve();
     } else {
-      // في production، الملفات موجودة في resources/app.asar أو resources/app
-      serverPath = path.join(process.resourcesPath, 'app/backend/server.js');
+      /**
+       * In Production:
+       * Because we used 'asarUnpack' for the backend folder in package.json,
+       * the files are moved to 'app.asar.unpacked'. 
+       * SQLite and child_process works much better from here.
+       */
+      serverPath = path.join(process.resourcesPath, 'app.asar.unpacked/backend/server.js');
       
-      // إذا لم يكن موجود، جرب مسار آخر
+      // Fallback check if the path above doesn't exist for some reason
       if (!fs.existsSync(serverPath)) {
-        serverPath = path.join(__dirname, '../backend/server.js');
+        serverPath = path.join(app.getAppPath(), 'backend/server.js');
       }
     }
     
     console.log('🚀 Starting backend server...');
     console.log('📂 Server path:', serverPath);
-    console.log('📂 Server exists?', fs.existsSync(serverPath));
     
-    // تحديد منفذ ديناميكي (للتأكد من عدم التعارض)
     const PORT = 3001;
     
-    serverProcess = spawn('node', [serverPath], {
-      stdio: ['ignore', 'pipe', 'pipe'], // تغيير من inherit لـ pipe
+    /**
+     * Use process.execPath (the Electron exe itself) to run the script.
+     * ELECTRON_RUN_AS_NODE: '1' makes Electron act like a standard Node.js binary.
+     */
+    serverProcess = spawn(process.execPath, [serverPath], {
+      stdio: ['ignore', 'pipe', 'pipe'],
       env: { 
         ...process.env, 
-        NODE_ENV: isDev ? 'development' : 'production',
+        NODE_ENV: 'production',
         USER_DATA_PATH: userDataPath,
+        ELECTRON_RUN_AS_NODE: '1', 
         PORT: PORT
       }
     });
@@ -115,35 +123,42 @@ function startBackendServer() {
 
     serverProcess.stdout?.on('data', (data) => {
       const message = data.toString();
-      console.log('[SERVER]', message);
+      console.log('[SERVER LOG]:', message);
       
-      if (message.includes('Server running') && !serverStarted) {
+      // Matches the console.log in your server.js
+      if (message.includes('Server running') || message.includes('localhost:3001')) {
         serverStarted = true;
-        console.log('✅ Backend server started successfully!');
+        console.log('✅ Backend server is LIVE');
         resolve();
       }
     });
 
     serverProcess.stderr?.on('data', (data) => {
-      console.error('[SERVER ERROR]', data.toString());
+      const errorMsg = data.toString();
+      console.error('[SERVER ERROR]:', errorMsg);
+      
+      // If the database fails to load, we want to know immediately
+      if (errorMsg.includes('Error')) {
+        mainWindow?.webContents.executeJavaScript(`console.error("Backend Error: ${errorMsg.replace(/"/g, '\\"')}")`);
+      }
     });
 
     serverProcess.on('error', (err) => {
-      console.error('❌ Failed to start server:', err);
+      console.error('❌ Failed to spawn backend process:', err);
       reject(err);
     });
 
     serverProcess.on('exit', (code) => {
-      console.log(`❌ Server exited with code ${code}`);
+      console.log(`❌ Backend server process exited with code ${code}`);
     });
 
-    // Fallback - إذا لم يبدأ السيرفر خلال 5 ثواني، نفترض أنه بدأ
+    // Fallback: If no output is detected within 7 seconds, resolve anyway
     setTimeout(() => {
       if (!serverStarted) {
-        console.log('⚠️ Server start timeout - assuming it started');
+        console.log('⚠️ Server start confirmation timed out, proceeding...');
         resolve();
       }
-    }, 5000);
+    }, 7000);
   });
 }
 
