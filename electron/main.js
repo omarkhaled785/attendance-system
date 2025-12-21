@@ -82,7 +82,8 @@ function startBackendServer() {
     
     let serverPath;
     if (isDev) {
-      serverPath = path.join(__dirname, '../backend/server.js');
+      console.log("⚠️ Dev mode: backend is already running. Skipping startBackendServer()");
+      return resolve();
     } else {
       // في production، الملفات موجودة في resources/app.asar أو resources/app
       serverPath = path.join(process.resourcesPath, 'app/backend/server.js');
