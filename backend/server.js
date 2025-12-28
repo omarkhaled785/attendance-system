@@ -6,7 +6,6 @@ const BackupSystem = require('./backup');
 const app = express();
 const PORT = 3001;
 
-// تفعيل النسخ الاحتياطي التلقائي
 const backupSystem = new BackupSystem();
 backupSystem.startAutoBackup();
 
@@ -27,13 +26,17 @@ app.get('/api/workers', (req, res) => {
 
 app.post('/api/workers', (req, res) => {
   try {
-    const { name, age, phone, national_id, date_joined, photo } = req.body;
+    const { name, age, phone, national_id, date_joined, photo, hourly_rate } = req.body;
     const stmt = db.prepare(`
-      INSERT INTO workers (name, age, phone, national_id, date_joined, photo) 
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO workers (name, age, phone, national_id, date_joined, photo, hourly_rate) 
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(name, age, phone, national_id, date_joined, photo);
-    res.json({ id: result.lastInsertRowid, name, age, phone, national_id, date_joined, photo });
+    const result = stmt.run(name, age, phone, national_id, date_joined, photo || null, hourly_rate || 50);
+    res.json({ 
+      id: result.lastInsertRowid, 
+      name, age, phone, national_id, date_joined, photo, 
+      hourly_rate: hourly_rate || 50 
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -44,6 +47,17 @@ app.get('/api/workers/:id', (req, res) => {
     const worker = db.prepare('SELECT * FROM workers WHERE id = ?').get(req.params.id);
     if (!worker) return res.status(404).json({ error: 'Worker not found' });
     res.json(worker);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/workers/:id/hourly-rate', (req, res) => {
+  try {
+    const { rate } = req.body;
+    const stmt = db.prepare('UPDATE workers SET hourly_rate = ? WHERE id = ?');
+    stmt.run(parseFloat(rate), req.params.id);
+    res.json({ success: true, rate: parseFloat(rate) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -98,7 +112,6 @@ app.get('/api/workers/:id/report', (req, res) => {
   }
 });
 
-// ============= APIs الحضور =============
 
 app.get('/api/attendance/today', (req, res) => {
   try {
@@ -146,9 +159,6 @@ app.post('/api/attendance/add-bonus', (req, res) => {
   }
 });
 
-// Replace the attendance record endpoint in server.js
-// Find app.post('/api/attendance/record', ...) and replace it
-
 app.post('/api/attendance/record', (req, res) => {
   try {
     const { workerId, type } = req.body;
@@ -157,7 +167,6 @@ app.post('/api/attendance/record', (req, res) => {
     
     const row = db.prepare('SELECT * FROM attendance WHERE worker_id = ? AND date = ?').get(workerId, today);
     
-    // If no record exists
     if (!row) {
       if (type !== 'check_in') {
         return res.status(400).json({ error: 'يجب تسجيل الحضور أولاً' });
@@ -166,17 +175,12 @@ app.post('/api/attendance/record', (req, res) => {
       return res.json({ success: true, time: now });
     }
     
-    // ===== VALIDATION CHECKS =====
-    
-    // Check-in validation
     if (type === 'check_in') {
-      // Already checked in
       if (row.check_in) {
         return res.status(400).json({ error: 'تم تسجيل الحضور بالفعل' });
       }
     }
     
-    // Lunch-out validation
     if (type === 'lunch_out') {
       if (!row.check_in) {
         return res.status(400).json({ error: 'يجب تسجيل الحضور أولاً' });
@@ -185,40 +189,35 @@ app.post('/api/attendance/record', (req, res) => {
         return res.status(400).json({ error: 'العامل غادر بالفعل - السجل مغلق' });
       }
       if (row.lunch_out) {
-        return res.status(400).json({ error: 'تم تسجيل خروج الغدا بالفعل' });
+        return res.status(400).json({ error: 'تم تسجيل خروج الغداء بالفعل' });
       }
     }
     
-    // Lunch-in validation
     if (type === 'lunch_in') {
       if (!row.lunch_out) {
-        return res.status(400).json({ error: 'يجب تسجيل خروج الغدا أولاً' });
+        return res.status(400).json({ error: 'يجب تسجيل خروج الغداء أولاً' });
       }
       if (row.check_out) {
         return res.status(400).json({ error: 'العامل غادر بالفعل - السجل مغلق' });
       }
       if (row.lunch_in) {
-        return res.status(400).json({ error: 'تم تسجيل العودة من الغدا بالفعل' });
+        return res.status(400).json({ error: 'تم تسجيل العودة من الغداء بالفعل' });
       }
     }
     
-    // Check-out validation - FIXED LOGIC
     if (type === 'check_out') {
       if (!row.check_in) {
         return res.status(400).json({ error: 'يجب تسجيل الحضور أولاً' });
       }
       
-      // FIXED: Only require lunch_in if lunch_out was recorded
       if (row.lunch_out && !row.lunch_in) {
-        return res.status(400).json({ error: 'يجب تسجيل العودة من الغدا أولاً' });
+        return res.status(400).json({ error: 'يجب تسجيل العودة من الغداء أولاً' });
       }
       
       if (row.check_out) {
         return res.status(400).json({ error: 'تم تسجيل الانصراف بالفعل' });
       }
     }
-    
-    // ===== PERFORM THE ACTION =====
     
     let totalHours = 0;
     
@@ -246,7 +245,6 @@ app.post('/api/attendance/record', (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 function calculateTotalHours(checkIn, checkOut, lunchOut, lunchIn) {
   if (!checkIn || !checkOut) return 0;
@@ -277,7 +275,7 @@ function parseTime(timeString) {
 app.get('/api/reports/daily/:date', (req, res) => {
   try {
     const query = `
-      SELECT w.name, a.check_in, a.check_out, a.total_hours
+      SELECT w.name, w.hourly_rate, a.check_in, a.check_out, a.total_hours
       FROM attendance a
       JOIN workers w ON a.worker_id = w.id
       WHERE a.date = ?
@@ -290,16 +288,13 @@ app.get('/api/reports/daily/:date', (req, res) => {
   }
 });
 
-// Replace the weekly report endpoint in server.js
-
 app.get('/api/reports/weekly', (req, res) => {
   try {
-    const { date } = req.query; // Target date (end of week)
+    const { date } = req.query;
     const targetDate = date ? new Date(date) : new Date();
     
-    // Calculate week start (7 days BEFORE the target date, inclusive)
     const weekStart = new Date(targetDate);
-    weekStart.setDate(weekStart.getDate() - 6); // Go back 6 days (so total is 7 days including target)
+    weekStart.setDate(weekStart.getDate() - 6);
     
     const startDateStr = weekStart.toLocaleDateString('en-CA');
     const endDateStr = targetDate.toLocaleDateString('en-CA');
@@ -309,6 +304,7 @@ app.get('/api/reports/weekly', (req, res) => {
     const query = `
       SELECT 
         w.name,
+        w.hourly_rate,
         COUNT(DISTINCT CASE 
           WHEN a.check_in IS NOT NULL THEN a.date 
         END) as days_present,
@@ -317,7 +313,7 @@ app.get('/api/reports/weekly', (req, res) => {
       LEFT JOIN attendance a ON w.id = a.worker_id
         AND a.date >= ?
         AND a.date <= ?
-      GROUP BY w.id, w.name
+      GROUP BY w.id, w.name, w.hourly_rate
       ORDER BY w.name
     `;
     
@@ -329,10 +325,6 @@ app.get('/api/reports/weekly', (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-// ========================================
-// REPLACE IN server.js - Monthly Report
-// ========================================
 
 app.get('/api/reports/monthly', (req, res) => {
   try {
@@ -346,7 +338,6 @@ app.get('/api/reports/monthly', (req, res) => {
     
     console.log(`📅 Monthly report: ${startDate} to ${endDate}`);
     
-    // Calculate work days in the selected month (excluding ONLY Friday)
     const getWorkDaysInMonth = (year, month) => {
       const firstDay = new Date(year, month - 1, 1);
       const lastDay = new Date(year, month, 0);
@@ -354,8 +345,6 @@ app.get('/api/reports/monthly', (req, res) => {
       
       for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
         const dayOfWeek = d.getDay();
-        // 5 = Friday (holiday)
-        // All other days (0-4, 6) are work days
         if (dayOfWeek !== 5) {
           workDays++;
         }
@@ -369,6 +358,7 @@ app.get('/api/reports/monthly', (req, res) => {
       SELECT 
         w.name,
         w.date_joined,
+        w.hourly_rate,
         COUNT(DISTINCT CASE 
           WHEN a.check_in IS NOT NULL THEN a.date 
         END) as days_present,
@@ -377,25 +367,22 @@ app.get('/api/reports/monthly', (req, res) => {
       LEFT JOIN attendance a ON w.id = a.worker_id
         AND a.date >= ?
         AND a.date <= ?
-      GROUP BY w.id, w.name, w.date_joined
+      GROUP BY w.id, w.name, w.date_joined, w.hourly_rate
       ORDER BY w.name
     `;
     
     const rows = db.prepare(query).all(startDate, endDate);
     
-    // Calculate absence days based on hire date
     const result = rows.map(row => {
       const joinDate = new Date(row.date_joined);
       const monthStart = new Date(startDate);
       const monthEnd = new Date(endDate);
       
-      // If hired after month start, calculate from hire date
       const startDate_calc = joinDate > monthStart ? joinDate : monthStart;
       
       let workerWorkDays = 0;
       for (let d = new Date(startDate_calc); d <= monthEnd; d.setDate(d.getDate() + 1)) {
         const dayOfWeek = d.getDay();
-        // Exclude ONLY Friday (5)
         if (dayOfWeek !== 5) {
           workerWorkDays++;
         }
@@ -403,6 +390,7 @@ app.get('/api/reports/monthly', (req, res) => {
       
       return {
         name: row.name,
+        hourly_rate: row.hourly_rate,
         days_present: row.days_present || 0,
         days_absent: Math.max(0, workerWorkDays - (row.days_present || 0)),
         total_hours: row.total_hours || 0
@@ -432,30 +420,6 @@ app.put('/api/settings/hourly-rate', (req, res) => {
     const { rate } = req.body;
     db.prepare('UPDATE settings SET hourly_rate = ? WHERE id = 1').run(rate);
     res.json({ success: true, rate });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.put('/api/settings/password', (req, res) => {
-  try {
-    const { password } = req.body;
-    db.prepare('UPDATE settings SET admin_password = ? WHERE id = 1').run(password);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/api/auth/login', (req, res) => {
-  try {
-    const { password } = req.body;
-    const row = db.prepare('SELECT admin_password FROM settings WHERE id = 1').get();
-    if (row && row.admin_password === password) {
-      res.json({ success: true });
-    } else {
-      res.status(401).json({ success: false, message: 'كلمة مرور خاطئة' });
-    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

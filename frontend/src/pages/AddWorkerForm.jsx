@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import './AddWorkerForm.css';
-
 import API_URL from '../config';
+
 function AddWorkerForm({ onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     name: '',
@@ -9,14 +9,14 @@ function AddWorkerForm({ onClose, onSuccess }) {
     phone: '',
     national_id: '',
     date_joined: new Date().toLocaleDateString('en-CA'),
-    photo: ''
+    photo: '',
+    hourly_rate: 50
   });
   const [loading, setLoading] = useState(false);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // التحقق من حجم الملف (أقل من 5MB)
       if (file.size > 5 * 1024 * 1024) {
         alert('حجم الصورة كبير جداً. يرجى اختيار صورة أقل من 5 ميجابايت');
         e.target.value = '';
@@ -25,7 +25,6 @@ function AddWorkerForm({ onClose, onSuccess }) {
 
       const reader = new FileReader();
       reader.onloadend = () => {
-        // ضغط الصورة
         compressImage(reader.result, (compressed) => {
           setFormData({ ...formData, photo: compressed });
         });
@@ -43,7 +42,6 @@ function AddWorkerForm({ onClose, onSuccess }) {
       let width = img.width;
       let height = img.height;
       
-      // تصغير الحجم لو أكبر من 800px
       const maxSize = 800;
       if (width > height && width > maxSize) {
         height = (height * maxSize) / width;
@@ -59,7 +57,6 @@ function AddWorkerForm({ onClose, onSuccess }) {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
       
-      // تحويل لـ base64 مع ضغط بجودة 0.7
       const compressed = canvas.toDataURL('image/jpeg', 0.7);
       callback(compressed);
     };
@@ -68,9 +65,8 @@ function AddWorkerForm({ onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // التحقق من البيانات
     if (!formData.name || !formData.age || !formData.phone || !formData.national_id || !formData.date_joined) {
-      alert('جميع الحقول مطلوبة');
+      alert('جميع الحقول المطلوبة يجب ملؤها');
       return;
     }
 
@@ -79,8 +75,8 @@ function AddWorkerForm({ onClose, onSuccess }) {
       return;
     }
 
-    if (!formData.photo) {
-      alert('يرجى إضافة صورة البطاقة');
+    if (!formData.hourly_rate || parseFloat(formData.hourly_rate) <= 0) {
+      alert('يرجى إدخال سعر ساعة صحيح');
       return;
     }
 
@@ -137,7 +133,7 @@ function AddWorkerForm({ onClose, onSuccess }) {
                 value={formData.age}
                 onChange={(e) => setFormData({ ...formData, age: e.target.value })}
                 placeholder="العمر"
-                min="18"
+                min="10"
                 max="65"
                 required
               />
@@ -169,26 +165,40 @@ function AddWorkerForm({ onClose, onSuccess }) {
             />
           </div>
 
-          <div className="form-group">
-            <label>تاريخ التعيين *</label>
-            <input
-              type="date"
-              value={formData.date_joined}
-              onChange={(e) => setFormData({ ...formData, date_joined: e.target.value })}
-              required
-            />
+          <div className="form-row">
+            <div className="form-group">
+              <label>تاريخ التعيين *</label>
+              <input
+                type="date"
+                value={formData.date_joined}
+                onChange={(e) => setFormData({ ...formData, date_joined: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>سعر الساعة (جنيه) *</label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={formData.hourly_rate}
+                onChange={(e) => setFormData({ ...formData, hourly_rate: e.target.value })}
+                placeholder="50"
+                required
+              />
+            </div>
           </div>
 
           <div className="form-group">
-            <label>صورة البطاقة الشخصية *</label>
+            <label>صورة البطاقة الشخصية (اختياري)</label>
             <input
               type="file"
               accept="image/*"
               onChange={handleImageChange}
-              required
             />
             <small className="help-text">
-              يفضل اختيار صورة أقل من 5 ميجابايت. سيتم ضغط الصورة تلقائياً.
+              يُفضل اختيار صورة أقل من 5 ميجابايت. سيتم ضغط الصورة تلقائياً.
             </small>
             {formData.photo && (
               <div className="image-preview">
@@ -198,11 +208,11 @@ function AddWorkerForm({ onClose, onSuccess }) {
           </div>
 
           <div className="form-actions">
-            <button type="button" onClick={onClose} className="cancel-btn">
+            <button type="button" onClick={onClose} className="cancel-btn" disabled={loading}>
               إلغاء
             </button>
-            <button type="submit" className="submit-btn">
-              إضافة العامل
+            <button type="submit" className="submit-btn" disabled={loading}>
+              {loading ? 'جاري الإضافة...' : 'إضافة العامل'}
             </button>
           </div>
         </form>

@@ -6,18 +6,14 @@ const fs = require('fs');
 let mainWindow;
 let serverProcess;
 
-// Detect environment
 const isDev = !app.isPackaged;
 
-// Ensure user data directories
 function ensureUserDataPath() {
   const userDataPath = app.getPath('userData');
-
   const backupsPath = path.join(userDataPath, 'backups');
   if (!fs.existsSync(backupsPath)) {
     fs.mkdirSync(backupsPath, { recursive: true });
   }
-
   console.log('✅ User Data Path:', userDataPath);
   return userDataPath;
 }
@@ -34,22 +30,43 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      devTools: isDev, // 🔒 disable DevTools in production
-    }
+      devTools: isDev,
+      backgroundThrottling: false,
+      offscreen: false,
+      disableHardwareAcceleration: false
+    },
+    show: false,
+    backgroundColor: '#ffffff'
   });
 
   mainWindow.setMenuBarVisibility(false);
 
-  // 🚫 Block inspect shortcuts in production
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (!isDev && (input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i') {
       event.preventDefault();
     }
   });
 
-  // 🚫 Disable right-click inspect menu
   mainWindow.webContents.on('context-menu', (e) => {
     if (!isDev) e.preventDefault();
+  });
+
+  mainWindow.on('focus', () => {
+    if (process.platform === 'win32') {
+      mainWindow.webContents.focus();
+    }
+  });
+
+  mainWindow.on('restore', () => {
+    setTimeout(() => {
+      mainWindow.focus();
+      mainWindow.webContents.focus();
+    }, 100);
   });
 
   if (isDev) {
@@ -60,7 +77,6 @@ function createWindow() {
 
     mainWindow.loadFile(indexPath).catch(err => {
       console.error('❌ Failed to load index.html:', err);
-      // ❌ DO NOT open DevTools for customer
     });
   }
 
@@ -70,6 +86,15 @@ function createWindow() {
 
   mainWindow.webContents.on('crashed', () => {
     console.error('❌ Renderer crashed');
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (process.platform === 'win32') {
+      setTimeout(() => {
+        mainWindow.focus();
+        mainWindow.webContents.focus();
+      }, 200);
+    }
   });
 }
 
@@ -135,10 +160,20 @@ function startBackendServer() {
   });
 }
 
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
+  app.commandLine.appendSwitch('disable-site-isolation-trials');
+}
+
 // App lifecycle
 app.on('ready', async () => {
   try {
     await startBackendServer();
+    
+    if (process.platform === 'win32') {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
     createWindow();
   } catch (err) {
     console.error('❌ App startup failed:', err);
@@ -153,6 +188,16 @@ app.on('window-all-closed', () => {
 
 app.on('quit', () => {
   if (serverProcess) serverProcess.kill('SIGKILL');
+});
+
+app.on('activate', () => {
+  if (mainWindow === null) {
+    createWindow();
+  } else if (process.platform === 'win32') {
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.webContents.focus();
+  }
 });
 
 process.on('uncaughtException', (err) => {

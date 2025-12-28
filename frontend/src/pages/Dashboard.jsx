@@ -2,69 +2,39 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AddWorkerForm from './AddWorkerForm';
 import './Dashboard.css';
-
 import API_URL from '../config';
+
 function Dashboard() {
   const navigate = useNavigate();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
   const [activeTab, setActiveTab] = useState('workers');
   const [showAddWorker, setShowAddWorker] = useState(false);
   
-  // بيانات العمال
   const [workers, setWorkers] = useState([]);
-  const [newWorkerName, setNewWorkerName] = useState('');
-  const [newWorkerPhone, setNewWorkerPhone] = useState('');
   
-  // بيانات التقارير
   const [reportType, setReportType] = useState('monthly');
   const [reportData, setReportData] = useState([]);
   const [reportDate, setReportDate] = useState(new Date().toLocaleDateString('en-CA'));
-  const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1); // 1-12
+  const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
   const [isLoadingReport, setIsLoadingReport] = useState(false);
   
-  // الإعدادات
   const [hourlyRate, setHourlyRate] = useState(50);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   
-  // البونص
   const [showBonusModal, setShowBonusModal] = useState(false);
   const [bonusWorkerId, setBonusWorkerId] = useState(null);
   const [bonusHours, setBonusHours] = useState('');
   const [bonusDate, setBonusDate] = useState(new Date().toLocaleDateString('en-CA'));
   
-  // النسخ الاحتياطي
+  const [showRateModal, setShowRateModal] = useState(false);
+  const [rateWorkerId, setRateWorkerId] = useState(null);
+  const [newHourlyRate, setNewHourlyRate] = useState('');
+  
   const [backups, setBackups] = useState([]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      loadWorkers();
-      loadSettings();
-    }
-  }, [isAuthenticated]);
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(`${API_URL}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        setIsAuthenticated(true);
-        setPassword('');
-      } else {
-        alert('كلمة المرور خاطئة');
-      }
-    } catch (error) {
-      alert('حدث خطأ في تسجيل الدخول');
-    }
-  };
+    loadWorkers();
+    loadSettings();
+  }, []);
 
   const loadWorkers = async () => {
     try {
@@ -76,13 +46,28 @@ function Dashboard() {
     }
   };
 
+  // Calculate totals for reports
+  const calculateTotals = () => {
+    if (reportData.length === 0) return { totalHours: 0, totalAmount: 0 };
+    
+    const totalHours = reportData.reduce((sum, row) => sum + (parseFloat(row.total_hours) || 0), 0);
+    const totalAmount = reportData.reduce((sum, row) => {
+      const rate = row.hourly_rate || 50;
+      return sum + ((parseFloat(row.total_hours) || 0) * rate);
+    }, 0);
+    
+    return { 
+      totalHours: totalHours.toFixed(2), 
+      totalAmount: totalAmount.toFixed(2) 
+    };
+  };
+
   const downloadReport = () => {
     if (reportData.length === 0) {
       alert('لا توجد بيانات لتحميلها');
       return;
     }
 
-    // إنشاء اسم الملف حسب نوع التقرير
     let filename = 'تقرير_';
     if (reportType === 'daily') {
       filename += `يومي_${reportDate}`;
@@ -96,26 +81,36 @@ function Dashboard() {
 
     let csvContent = '';
     
-    // العناوين
     if (reportType === 'daily') {
-      csvContent = 'الاسم,وقت الحضور,وقت الانصراف,إجمالي الساعات,المستحق\n';
+      csvContent = 'الاسم,وقت الحضور,وقت الانصراف,إجمالي الساعات,سعر الساعة,المستحق\n';
       reportData.forEach(row => {
-        csvContent += `${row.name},${row.check_in || '--'},${row.check_out || '--'},${row.total_hours || 0},${((row.total_hours || 0) * hourlyRate).toFixed(2)}\n`;
+        const rate = row.hourly_rate || 50;
+        csvContent += `${row.name},${row.check_in || '--'},${row.check_out || '--'},${row.total_hours || 0},${rate},${((row.total_hours || 0) * rate).toFixed(2)}\n`;
       });
     } else {
       csvContent = reportType === 'monthly' 
-        ? 'الاسم,أيام الحضور,أيام الغياب,إجمالي الساعات,المستحق\n'
-        : 'الاسم,أيام الحضور,إجمالي الساعات,المستحق\n';
+        ? 'الاسم,أيام الحضور,أيام الغياب,إجمالي الساعات,سعر الساعة,المستحق\n'
+        : 'الاسم,أيام الحضور,إجمالي الساعات,سعر الساعة,المستحق\n';
       
       reportData.forEach(row => {
+        const rate = row.hourly_rate || 50;
         const line = reportType === 'monthly'
-          ? `${row.name},${row.days_present || 0},${row.days_absent || 0},${row.total_hours || 0},${((row.total_hours || 0) * hourlyRate).toFixed(2)}\n`
-          : `${row.name},${row.days_present || 0},${row.total_hours || 0},${((row.total_hours || 0) * hourlyRate).toFixed(2)}\n`;
+          ? `${row.name},${row.days_present || 0},${row.days_absent || 0},${row.total_hours || 0},${rate},${((row.total_hours || 0) * rate).toFixed(2)}\n`
+          : `${row.name},${row.days_present || 0},${row.total_hours || 0},${rate},${((row.total_hours || 0) * rate).toFixed(2)}\n`;
         csvContent += line;
       });
     }
 
-    // تحويل إلى UTF-8 BOM للعربي
+    // Add totals row
+    const totals = calculateTotals();
+    if (reportType === 'daily') {
+      csvContent += `الإجمالي,,,${totals.totalHours},,${totals.totalAmount}\n`;
+    } else if (reportType === 'monthly') {
+      csvContent += `الإجمالي,,,${totals.totalHours},,${totals.totalAmount}\n`;
+    } else {
+      csvContent += `الإجمالي,,${totals.totalHours},,${totals.totalAmount}\n`;
+    }
+
     const BOM = '\uFEFF';
     const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -139,11 +134,6 @@ function Dashboard() {
     }
   };
 
-  const addWorker = async (e) => {
-    e.preventDefault();
-    setShowAddWorker(true);
-  };
-
   const deleteWorker = async (id, name) => {
     if (!confirm(`هل أنت متأكد من حذف ${name}؟`)) return;
 
@@ -163,23 +153,18 @@ function Dashboard() {
 
   const loadReport = async () => {
     setIsLoadingReport(true);
-    setReportData([]); // مسح البيانات القديمة
+    setReportData([]);
     
     try {
       let url = `${API_URL}/reports/${reportType}`;
       
       if (reportType === 'daily') {
         url += `/${reportDate}`;
-        console.log(`📅 Loading DAILY report for: ${reportDate}`);
       } else if (reportType === 'weekly') {
         url += `?date=${reportDate}`;
-        console.log(`📅 Loading WEEKLY report ending on: ${reportDate}`);
       } else if (reportType === 'monthly') {
         url += `?year=${reportYear}&month=${reportMonth}`;
-        console.log(`📅 Loading MONTHLY report for: ${reportMonth}/${reportYear}`);
       }
-      
-      console.log(`🌐 Fetching: ${url}`);
       
       const res = await fetch(url);
       
@@ -188,9 +173,6 @@ function Dashboard() {
       }
       
       const data = await res.json();
-      
-      console.log(`✅ Report data received (${data.length} records):`, data);
-      
       setReportData(data);
     } catch (error) {
       console.error('❌ Error loading report:', error);
@@ -209,38 +191,39 @@ function Dashboard() {
       });
       
       if (res.ok) {
-        alert('تم تحديث سعر الساعة بنجاح');
+        alert('تم تحديث سعر الساعة الافتراضي بنجاح');
       }
     } catch (error) {
       alert('حدث خطأ في تحديث سعر الساعة');
     }
   };
 
-  const updatePassword = async () => {
-    if (newPassword !== confirmPassword) {
-      alert('كلمات المرور غير متطابقة');
-      return;
-    }
-    
-    if (newPassword.length < 4) {
-      alert('كلمة المرور يجب أن تكون 4 أحرف على الأقل');
+  const openRateModal = (workerId, currentRate) => {
+    setRateWorkerId(workerId);
+    setNewHourlyRate(currentRate || 50);
+    setShowRateModal(true);
+  };
+
+  const updateWorkerRate = async () => {
+    if (!newHourlyRate || parseFloat(newHourlyRate) <= 0) {
+      alert('من فضلك أدخل سعر ساعة صحيح');
       return;
     }
 
     try {
-      const res = await fetch(`${API_URL}/settings/password`, {
+      const res = await fetch(`${API_URL}/workers/${rateWorkerId}/hourly-rate`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: newPassword })
+        body: JSON.stringify({ rate: parseFloat(newHourlyRate) })
       });
-      
+
       if (res.ok) {
-        setNewPassword('');
-        setConfirmPassword('');
-        alert('تم تغيير كلمة المرور بنجاح');
+        alert('تم تحديث سعر الساعة بنجاح');
+        setShowRateModal(false);
+        loadWorkers();
       }
     } catch (error) {
-      alert('حدث خطأ في تغيير كلمة المرور');
+      alert('حدث خطأ في تحديث سعر الساعة');
     }
   };
 
@@ -331,39 +314,19 @@ function Dashboard() {
     }
   };
 
-useEffect(() => {
-  if (activeTab === 'reports') {
-    if (reportType === 'monthly') {
-      loadReport();
-    } else if (reportType === 'daily' && reportDate) {
-      loadReport();
-    } else if (reportType === 'weekly' && reportDate) {
-      loadReport();
+  useEffect(() => {
+    if (activeTab === 'reports') {
+      if (reportType === 'monthly') {
+        loadReport();
+      } else if (reportType === 'daily' && reportDate) {
+        loadReport();
+      } else if (reportType === 'weekly' && reportDate) {
+        loadReport();
+      }
     }
-  }
-}, [activeTab, reportType, reportDate, reportMonth, reportYear]);
+  }, [activeTab, reportType, reportDate, reportMonth, reportYear]);
 
-
-  if (!isAuthenticated) {
-    return (
-      <div className="login-container">
-        <div className="login-box">
-          <h2>تسجيل دخول الأدمن</h2>
-          <form onSubmit={handleLogin}>
-            <input
-              type="password"
-              placeholder="كلمة المرور"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="login-input"
-            />
-            <button type="submit" className="login-btn">دخول</button>
-          </form>
-          <a href="/" className="back-link">← العودة لصفحة العمال</a>
-        </div>
-      </div>
-    );
-  }
+  const totals = calculateTotals();
 
   return (
     <div className="dashboard-container">
@@ -415,11 +378,44 @@ useEffect(() => {
           </div>
         </div>
       )}
+
+      {showRateModal && (
+        <div className="modal-overlay" onClick={() => setShowRateModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>تعديل سعر الساعة</h2>
+              <button className="close-btn" onClick={() => setShowRateModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>سعر الساعة الجديد (جنيه)</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  value={newHourlyRate}
+                  onChange={(e) => setNewHourlyRate(e.target.value)}
+                  className="input-field"
+                  placeholder="50"
+                />
+              </div>
+              <div className="form-actions">
+                <button onClick={() => setShowRateModal(false)} className="cancel-btn">
+                  إلغاء
+                </button>
+                <button onClick={updateWorkerRate} className="submit-btn">
+                  تحديث
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="dashboard-header">
         <h1>لوحة التحكم - الأدمن</h1>
-        <button onClick={() => setIsAuthenticated(false)} className="logout-btn">
-          تسجيل الخروج
+        <button onClick={() => navigate('/')} className="logout-btn">
+          العودة للصفحة الرئيسية
         </button>
       </div>
 
@@ -469,6 +465,7 @@ useEffect(() => {
                     <th>العمر</th>
                     <th>رقم الهاتف</th>
                     <th>تاريخ التعيين</th>
+                    <th>سعر الساعة</th>
                     <th>الإجراءات</th>
                   </tr>
                 </thead>
@@ -486,6 +483,15 @@ useEffect(() => {
                       <td>{worker.age} سنة</td>
                       <td>{worker.phone}</td>
                       <td>{new Date(worker.date_joined).toLocaleDateString('ar-EG')}</td>
+                      <td>
+                        <button
+                          onClick={() => openRateModal(worker.id, worker.hourly_rate)}
+                          className="rate-display-btn"
+                          title="تعديل سعر الساعة"
+                        >
+                          {worker.hourly_rate || 50} ج/س
+                        </button>
+                      </td>
                       <td>
                         <button 
                           onClick={() => openBonusModal(worker.id)}
@@ -545,11 +551,7 @@ useEffect(() => {
                 <>
                   <select
                     value={reportMonth}
-                    onChange={(e) => {
-                      const newMonth = parseInt(e.target.value);
-                      console.log(`📆 Month changed to: ${newMonth}`);
-                      setReportMonth(newMonth);
-                    }}
+                    onChange={(e) => setReportMonth(parseInt(e.target.value))}
                     className="select-field"
                   >
                     <option value="1">يناير</option>
@@ -569,11 +571,7 @@ useEffect(() => {
                   <input
                     type="number"
                     value={reportYear}
-                    onChange={(e) => {
-                      const newYear = parseInt(e.target.value);
-                      console.log(`📆 Year changed to: ${newYear}`);
-                      setReportYear(newYear);
-                    }}
+                    onChange={(e) => setReportYear(parseInt(e.target.value))}
                     className="input-field"
                     placeholder="السنة"
                     min="2020"
@@ -620,31 +618,55 @@ useEffect(() => {
                         </>
                       )}
                       <th>إجمالي الساعات</th>
-                      <th>المستحق ({hourlyRate} ج/ساعة)</th>
+                      <th>سعر الساعة</th>
+                      <th>المستحق</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {reportData.map((row, i) => (
-                      <tr key={i}>
-                        <td>{row.name}</td>
-                        {reportType === 'daily' && (
-                          <>
-                            <td>{row.check_in || '--'}</td>
-                            <td>{row.check_out || '--'}</td>
-                          </>
-                        )}
-                        {reportType !== 'daily' && (
-                          <>
-                            <td>{row.days_present || 0}</td>
-                            {reportType === 'monthly' && <td>{row.days_absent || 0}</td>}
-                          </>
-                        )}
-                        <td>{row.total_hours || 0} ساعة</td>
-                        <td className="amount">
-                          {((row.total_hours || 0) * hourlyRate).toFixed(2)} جنيه
-                        </td>
-                      </tr>
-                    ))}
+                    {reportData.map((row, i) => {
+                      const rate = row.hourly_rate || 50;
+                      return (
+                        <tr key={i}>
+                          <td>{row.name}</td>
+                          {reportType === 'daily' && (
+                            <>
+                              <td>{row.check_in || '--'}</td>
+                              <td>{row.check_out || '--'}</td>
+                            </>
+                          )}
+                          {reportType !== 'daily' && (
+                            <>
+                              <td>{row.days_present || 0}</td>
+                              {reportType === 'monthly' && <td>{row.days_absent || 0}</td>}
+                            </>
+                          )}
+                          <td>{row.total_hours || 0} ساعة</td>
+                          <td>{rate} ج</td>
+                          <td className="amount">
+                            {((row.total_hours || 0) * rate).toFixed(2)} جنيه
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {/* Total Row */}
+                    <tr className="total-row">
+                      <td><strong>الإجمالي</strong></td>
+                      {reportType === 'daily' && (
+                        <>
+                          <td>--</td>
+                          <td>--</td>
+                        </>
+                      )}
+                      {reportType !== 'daily' && (
+                        <>
+                          <td>--</td>
+                          {reportType === 'monthly' && <td>--</td>}
+                        </>
+                      )}
+                      <td><strong>{totals.totalHours} ساعة</strong></td>
+                      <td>--</td>
+                      <td className="amount"><strong>{totals.totalAmount} جنيه</strong></td>
+                    </tr>
                   </tbody>
                 </table>
               ) : (
@@ -718,7 +740,10 @@ useEffect(() => {
         {activeTab === 'settings' && (
           <div>
             <div className="settings-section">
-              <h3>سعر الساعة</h3>
+              <h3>سعر الساعة الافتراضي</h3>
+              <p className="settings-note">
+                ⚠️ هذا السعر سيستخدم للعمال الجدد فقط. لتعديل سعر عامل موجود، اذهب لقسم "إدارة العمال"
+              </p>
               <div className="setting-group">
                 <input
                   type="number"
@@ -729,29 +754,6 @@ useEffect(() => {
                 />
                 <button onClick={updateHourlyRate} className="save-btn">
                   حفظ
-                </button>
-              </div>
-            </div>
-
-            <div className="settings-section">
-              <h3>تغيير كلمة المرور</h3>
-              <div className="setting-group">
-                <input
-                  type="password"
-                  placeholder="كلمة المرور الجديدة"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="input-field"
-                />
-                <input
-                  type="password"
-                  placeholder="تأكيد كلمة المرور"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="input-field"
-                />
-                <button onClick={updatePassword} className="save-btn">
-                  تغيير
                 </button>
               </div>
             </div>

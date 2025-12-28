@@ -2,7 +2,6 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-// تحديد مسار قاعدة البيانات بناءً على البيئة
 function getDatabasePath() {
   const customPath = process.env.USER_DATA_PATH;
   if (customPath) {
@@ -23,12 +22,11 @@ const db = new Database(dbPath);
 console.log('Database connected successfully');
 console.log('Database path:', dbPath);
 
-// تفعيل Foreign Keys
 db.pragma('foreign_keys = ON');
 
 function initializeDatabase() {
   try {
-    // جدول العمال مع البيانات الكاملة
+    // Create workers table with hourly_rate
     db.exec(`
       CREATE TABLE IF NOT EXISTS workers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,12 +36,22 @@ function initializeDatabase() {
         national_id TEXT NOT NULL UNIQUE,
         date_joined DATE NOT NULL,
         photo TEXT,
+        hourly_rate REAL DEFAULT 50,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
     console.log('Workers table ready');
 
-    // جدول الحضور والانصراف
+    // Check if hourly_rate column exists, if not add it
+    const tableInfo = db.prepare("PRAGMA table_info(workers)").all();
+    const hasHourlyRate = tableInfo.some(col => col.name === 'hourly_rate');
+    
+    if (!hasHourlyRate) {
+      console.log('Adding hourly_rate column to existing workers table...');
+      db.exec('ALTER TABLE workers ADD COLUMN hourly_rate REAL DEFAULT 50');
+      console.log('hourly_rate column added successfully');
+    }
+
     db.exec(`
       CREATE TABLE IF NOT EXISTS attendance (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +68,6 @@ function initializeDatabase() {
     `);
     console.log('Attendance table ready');
 
-    // جدول الإعدادات
     db.exec(`
       CREATE TABLE IF NOT EXISTS settings (
         id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -70,7 +77,6 @@ function initializeDatabase() {
     `);
     console.log('Settings table ready');
 
-    // إضافة الإعدادات الافتراضية
     const insertSettings = db.prepare(`
       INSERT OR IGNORE INTO settings (id, hourly_rate, admin_password) 
       VALUES (1, 50, 'admin123')
@@ -78,12 +84,11 @@ function initializeDatabase() {
     insertSettings.run();
     console.log('Default settings inserted');
 
-    // إضافة عمال تجريبيين (فقط في Development)
     const count = db.prepare('SELECT COUNT(*) as count FROM workers').get();
     if (count.count === 0 && !process.env.USER_DATA_PATH) {
       const insertWorker = db.prepare(`
-        INSERT INTO workers (name, age, phone, national_id, date_joined) 
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO workers (name, age, phone, national_id, date_joined, hourly_rate) 
+        VALUES (?, ?, ?, ?, ?, ?)
       `);
 
       const insert = db.transaction((workers) => {
@@ -93,9 +98,9 @@ function initializeDatabase() {
       });
 
       insert([
-        ['أحمد محمد', 28, '01012345678', '29501011234567', '2024-01-15'],
-        ['محمود علي', 32, '01023456789', '29201011234568', '2024-02-01'],
-        ['خالد حسن', 25, '01034567890', '29801011234569', '2024-03-10']
+        ['أحمد محمد', 28, '01012345678', '29501011234567', '2024-01-15', 50],
+        ['محمود علي', 32, '01023456789', '29201011234568', '2024-02-01', 55],
+        ['خالد حسن', 25, '01034567890', '29801011234569', '2024-03-10', 45]
       ]);
       console.log('Sample workers inserted');
     }
