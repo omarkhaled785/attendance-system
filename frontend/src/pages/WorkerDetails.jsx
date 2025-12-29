@@ -1,81 +1,36 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import './Workers.css';
+import { useParams, useNavigate } from 'react-router-dom';
+import './WorkerDetails.css';
 
 import API_URL from '../config';
-
-function Workers() {
+function WorkerDetails() {
+  const { id } = useParams();
   const navigate = useNavigate();
-  const [workers, setWorkers] = useState([]);
+  const [worker, setWorker] = useState(null);
+  const [report, setReport] = useState({ attendance: [], summary: {} });
+  const [period, setPeriod] = useState('monthly');
   const [loading, setLoading] = useState(true);
-  const [showInstructions, setShowInstructions] = useState(false);
 
   useEffect(() => {
-    loadWorkersAttendance();
-    const interval = setInterval(loadWorkersAttendance, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    loadWorkerData();
+  }, [id, period]);
 
-  const loadWorkersAttendance = async () => {
+  const loadWorkerData = async () => {
     try {
-      const res = await fetch(`${API_URL}/attendance/today`);
-      const data = await res.json();
-      setWorkers(data);
+      // جلب بيانات العامل
+      const workerRes = await fetch(`${API_URL}/workers/${id}`);
+      const workerData = await workerRes.json();
+      setWorker(workerData);
+
+      // جلب تقرير العامل
+      const reportRes = await fetch(`${API_URL}/workers/${id}/report?period=${period}`);
+      const reportData = await reportRes.json();
+      setReport(reportData);
+
       setLoading(false);
     } catch (error) {
-      console.error('Error loading workers:', error);
+      console.error('Error loading worker data:', error);
       setLoading(false);
-    }
-  };
-
-  const recordTime = async (workerId, type) => {
-    try {
-      const res = await fetch(`${API_URL}/attendance/record`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workerId, type })
-      });
-      
-      const data = await res.json();
-      
-      if (data.success) {
-        loadWorkersAttendance();
-      } else {
-        alert(data.error || 'حدث خطأ في تسجيل الوقت');
-      }
-    } catch (error) {
-      console.error('Error recording time:', error);
-      alert('حدث خطأ في تسجيل الوقت');
-    }
-  };
-
-  const formatTime = (time) => {
-    if (!time) return '--:--';
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12;
-    return `${hour12}:${minutes} ${ampm}`;
-  };
-
-  const resetTodayData = async () => {
-    if (!confirm('هل أنت متأكد من إعادة تعيين بيانات اليوم؟\nسيتم حذف جميع التسجيلات لليوم الحالي فقط')) {
-      return;
-    }
-
-    try {
-      const res = await fetch(`${API_URL}/attendance/reset-today`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (res.ok) {
-        alert('تم إعادة تعيين البيانات بنجاح');
-        loadWorkersAttendance();
-      }
-    } catch (error) {
-      console.error('Error resetting data:', error);
-      alert('حدث خطأ في إعادة التعيين');
     }
   };
 
@@ -83,151 +38,123 @@ function Workers() {
     return <div className="loading">جاري التحميل...</div>;
   }
 
+  if (!worker) {
+    return <div className="loading">العامل غير موجود</div>;
+  }
+
   return (
-    <div className="workers-container">
-      <div className="header">
-        <h1>نظام الحضور والانصراف</h1>
-        <div className="current-date">
-          {new Date().toLocaleDateString('ar-EG', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })}
-        </div>
+    <div className="worker-details-container">
+      <div className="details-header">
+        <button onClick={() => navigate(-1)} className="back-btn">
+          ← رجوع
+        </button>
+        <h1>بيانات العامل</h1>
       </div>
 
-      <div className="workers-table-container">
-        <div className="info-box">
-          <div 
-            className="info-header" 
-            onClick={() => setShowInstructions(!showInstructions)}
-          >
-            <h3>📋 تعليمات التسجيل</h3>
-            <span className={`arrow ${showInstructions ? 'open' : ''}`}>▼</span>
+      <div className="details-content">
+        {/* البيانات الأساسية */}
+        <div className="info-card">
+          <h2>المعلومات الشخصية</h2>
+          <div className="info-grid">
+            <div className="info-item">
+              <span className="label">الاسم:</span>
+              <span className="value">{worker.name}</span>
+            </div>
+            <div className="info-item">
+              <span className="label">العمر:</span>
+              <span className="value">{worker.age} سنة</span>
+            </div>
+            <div className="info-item">
+              <span className="label">رقم الهاتف:</span>
+              <span className="value">{worker.phone}</span>
+            </div>
+            <div className="info-item">
+              <span className="label">الرقم القومي:</span>
+              <span className="value">{worker.national_id}</span>
+            </div>
+            <div className="info-item">
+              <span className="label">تاريخ التعيين:</span>
+              <span className="value">
+                {new Date(worker.date_joined).toLocaleDateString('ar-EG')}
+              </span>
+            </div>
           </div>
-          
-          {showInstructions && (
-            <ul className="info-list">
-              <li>✅ سجل الحضور عند الوصول</li>
-              <li>🍽️ سجل خروج ودخول الغدا (اختياري)</li>
-              <li>⚠️ لو سجلت خروج غداء، لازم تسجل الرجوع قبل الانصراف</li>
-              <li>🏠 سجل الانصراف عند المغادرة</li>
-              <li>⏰ يتم حساب ساعات العمل تلقائياً (بدون وقت الغداء)</li>
-              <li>🕐 جميع الأوقات بنظام 12 ساعة (AM/PM)</li>
-            </ul>
+
+          {worker.photo && (
+            <div className="id-photo">
+              <h3>صورة البطاقة</h3>
+              <img src={worker.photo} alt="البطاقة الشخصية" />
+            </div>
           )}
         </div>
-        
-        <table className="workers-table">
-          <thead>
-            <tr>
-              <th>اسم العامل</th>
-              <th>الوظيفة</th>
-              <th>تسجيل الحضور</th>
-              <th>خروج الغدا</th>
-              <th>دخول الغدا</th>
-              <th>تسجيل الانصراف</th>
-              <th>إجمالي الساعات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {workers.map((worker) => (
-              <tr key={worker.id}>
-                <td className="worker-name">
-                  <button 
-                    onClick={() => navigate(`/worker/${worker.id}`)}
-                    className="worker-name-btn"
-                  >
-                    {worker.name}
-                  </button>
-                </td>
 
-                <td className="job-title">
-                  {worker.job_title || 'عامل'}
-                </td>
-                
-                <td>
-                  <button
-                    className={`time-btn ${worker.check_in ? 'recorded' : ''}`}
-                    onClick={() => recordTime(worker.id, 'check_in')}
-                    disabled={worker.check_in}
-                  >
-                    {worker.check_in ? formatTime(worker.check_in) : 'تسجيل'}
-                  </button>
-                </td>
+        {/* الإحصائيات */}
+        <div className="stats-card">
+          <h2>الإحصائيات</h2>
+          <div className="period-selector">
+            <button
+              className={period === 'daily' ? 'active' : ''}
+              onClick={() => setPeriod('daily')}
+            >
+              اليوم
+            </button>
+            <button
+              className={period === 'monthly' ? 'active' : ''}
+              onClick={() => setPeriod('monthly')}
+            >
+              الشهر الحالي
+            </button>
+            <button
+              className={period === 'yearly' ? 'active' : ''}
+              onClick={() => setPeriod('yearly')}
+            >
+              السنة الحالية
+            </button>
+          </div>
 
-                <td>
-                  <button
-                    className={`time-btn ${worker.lunch_out ? 'recorded' : ''}`}
-                    onClick={() => recordTime(worker.id, 'lunch_out')}
-                    disabled={!worker.check_in || worker.lunch_out}
-                  >
-                    {worker.lunch_out ? formatTime(worker.lunch_out) : 'تسجيل'}
-                  </button>
-                </td>
+          <div className="stats-summary">
+            <div className="stat-box">
+              <div className="stat-value">{report.summary.daysWorked || 0}</div>
+              <div className="stat-label">أيام العمل</div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-value">{report.summary.totalHours || 0}</div>
+              <div className="stat-label">إجمالي الساعات</div>
+            </div>
+          </div>
+        </div>
 
-                <td>
-                  <button
-                    className={`time-btn ${worker.lunch_in ? 'recorded' : ''}`}
-                    onClick={() => recordTime(worker.id, 'lunch_in')}
-                    disabled={!worker.lunch_out || worker.lunch_in}
-                  >
-                    {worker.lunch_in ? formatTime(worker.lunch_in) : 'تسجيل'}
-                  </button>
-                </td>
-
-                <td>
-                  <button
-                    className={`time-btn ${worker.check_out ? 'recorded' : ''}`}
-                    onClick={() => recordTime(worker.id, 'check_out')}
-                    disabled={
-                      !worker.check_in || 
-                      (worker.lunch_out && !worker.lunch_in) ||
-                      worker.check_out
-                    }
-                    title={
-                      !worker.check_in 
-                        ? 'يجب تسجيل الحضور أولاً' 
-                        : (worker.lunch_out && !worker.lunch_in)
-                        ? 'يجب تسجيل العودة من الغداء أولاً'
-                        : ''
-                    }
-                  >
-                    {worker.check_out ? formatTime(worker.check_out) : 'تسجيل'}
-                  </button>
-                </td>
-
-                <td className="total-hours">
-                  {worker.total_hours ? `${worker.total_hours} ساعة` : '--'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="footer">
-        <button onClick={resetTodayData} className="reset-btn">
-          🔄 إعادة تعيين بيانات اليوم
-        </button>
-
-        <button 
-          onClick={() => navigate('/driver-trips')} 
-          className="driver-trips-link"
-        >
-          🚗 رحلات السائقين
-        </button>
-        
-        <button 
-          onClick={() => navigate('/dashboard')} 
-          className="admin-link"
-        >
-          👨‍💼 دخول لوحة التحكم (أدمن)
-        </button>
+        {/* سجل الحضور */}
+        <div className="attendance-card">
+          <h2>سجل الحضور</h2>
+          {report.attendance.length > 0 ? (
+            <table className="attendance-table">
+              <thead>
+                <tr>
+                  <th>التاريخ</th>
+                  <th>وقت الحضور</th>
+                  <th>وقت الانصراف</th>
+                  <th>عدد الساعات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.attendance.map((record, index) => (
+                  <tr key={index}>
+                    <td>{new Date(record.date).toLocaleDateString('ar-EG')}</td>
+                    <td>{record.check_in || '--'}</td>
+                    <td>{record.check_out || '--'}</td>
+                    <td>{record.total_hours || 0} ساعة</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="no-data">لا يوجد سجل حضور لهذه الفترة</p>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-export default Workers;
+export default WorkerDetails;
