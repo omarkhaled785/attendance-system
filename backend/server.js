@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const db = require('./db');
 const BackupSystem = require('./backup');
+const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = 3001;
@@ -24,18 +27,28 @@ app.get('/api/workers', (req, res) => {
   }
 });
 
+app.get('/api/workers/drivers', (req, res) => {
+  try {
+    const drivers = db.prepare("SELECT * FROM workers WHERE job_title = 'سواق' ORDER BY name").all();
+    res.json(drivers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/workers', (req, res) => {
   try {
-    const { name, age, phone, national_id, date_joined, photo, hourly_rate } = req.body;
+    const { name, age, phone, national_id, date_joined, photo, hourly_rate, job_title } = req.body;
     const stmt = db.prepare(`
-      INSERT INTO workers (name, age, phone, national_id, date_joined, photo, hourly_rate) 
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO workers (name, age, phone, national_id, date_joined, photo, hourly_rate, job_title) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(name, age, phone, national_id, date_joined, photo || null, hourly_rate || 50);
+    const result = stmt.run(name, age, phone, national_id, date_joined, photo || null, hourly_rate || 50, job_title || 'عامل');
     res.json({ 
       id: result.lastInsertRowid, 
       name, age, phone, national_id, date_joined, photo, 
-      hourly_rate: hourly_rate || 50 
+      hourly_rate: hourly_rate || 50,
+      job_title: job_title || 'عامل'
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -72,6 +85,79 @@ app.delete('/api/workers/:id', (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ============= Advances APIs =============
+
+app.post('/api/advances', (req, res) => {
+  try {
+    const { workerId, amount, date, notes } = req.body;
+    const stmt = db.prepare('INSERT INTO advances (worker_id, amount, date, notes) VALUES (?, ?, ?, ?)');
+    const result = stmt.run(workerId, amount, date, notes || null);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/advances/:workerId', (req, res) => {
+  try {
+    const advances = db.prepare('SELECT * FROM advances WHERE worker_id = ? ORDER BY date DESC').all(req.params.workerId);
+    const total = advances.reduce((sum, adv) => sum + adv.amount, 0);
+    res.json({ advances, total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============= Driver Trips APIs =============
+
+app.post('/api/driver-trips', (req, res) => {
+  try {
+    const { driverId, fromLocation, toLocation, departureTime, arrivalTime, date, notes } = req.body;
+    const stmt = db.prepare(`
+      INSERT INTO driver_trips (driver_id, from_location, to_location, departure_time, arrival_time, date, notes) 
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(driverId, fromLocation, toLocation, departureTime || null, arrivalTime || null, date, notes || null);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/driver-trips/:driverId', (req, res) => {
+  try {
+    const trips = db.prepare('SELECT * FROM driver_trips WHERE driver_id = ? ORDER BY date DESC, departure_time DESC').all(req.params.driverId);
+    res.json(trips);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/driver-trips/today/:driverId', (req, res) => {
+  try {
+    const today = new Date().toLocaleDateString('en-CA');
+    const trips = db.prepare('SELECT * FROM driver_trips WHERE driver_id = ? AND date = ? ORDER BY departure_time DESC').all(req.params.driverId, today);
+    res.json(trips);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Calculate work days excluding Fridays
+function calculateWorkDays(startDate, endDate) {
+  let workDays = 0;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dayOfWeek = d.getDay();
+    if (dayOfWeek !== 5) { // 5 = Friday
+      workDays++;
+    }
+  }
+  return workDays;
+}
 
 app.get('/api/workers/:id/report', (req, res) => {
   try {
@@ -112,12 +198,11 @@ app.get('/api/workers/:id/report', (req, res) => {
   }
 });
 
-
 app.get('/api/attendance/today', (req, res) => {
   try {
     const today = new Date().toLocaleDateString('en-CA');
     const query = `
-      SELECT w.id, w.name, a.check_in, a.lunch_out, a.lunch_in, a.check_out, a.total_hours
+      SELECT w.id, w.name, w.job_title, a.check_in, a.lunch_out, a.lunch_in, a.check_out, a.total_hours
       FROM workers w
       LEFT JOIN attendance a ON w.id = a.worker_id AND a.date = ?
       ORDER BY w.name
@@ -338,24 +423,11 @@ app.get('/api/reports/monthly', (req, res) => {
     
     console.log(`📅 Monthly report: ${startDate} to ${endDate}`);
     
-    const getWorkDaysInMonth = (year, month) => {
-      const firstDay = new Date(year, month - 1, 1);
-      const lastDay = new Date(year, month, 0);
-      let workDays = 0;
-      
-      for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
-        const dayOfWeek = d.getDay();
-        if (dayOfWeek !== 5) {
-          workDays++;
-        }
-      }
-      return workDays;
-    };
-    
-    const totalWorkDays = getWorkDaysInMonth(targetYear, targetMonth);
+    const totalWorkDays = calculateWorkDays(startDate, endDate);
     
     const query = `
       SELECT 
+        w.id,
         w.name,
         w.date_joined,
         w.hourly_rate,
@@ -379,21 +451,21 @@ app.get('/api/reports/monthly', (req, res) => {
       const monthEnd = new Date(endDate);
       
       const startDate_calc = joinDate > monthStart ? joinDate : monthStart;
+      const workerWorkDays = calculateWorkDays(startDate_calc.toLocaleDateString('en-CA'), endDate);
       
-      let workerWorkDays = 0;
-      for (let d = new Date(startDate_calc); d <= monthEnd; d.setDate(d.getDate() + 1)) {
-        const dayOfWeek = d.getDay();
-        if (dayOfWeek !== 5) {
-          workerWorkDays++;
-        }
-      }
+      // Get advances for this worker
+      const advancesQuery = db.prepare('SELECT COALESCE(SUM(amount), 0) as total FROM advances WHERE worker_id = ? AND date >= ? AND date <= ?');
+      const advancesData = advancesQuery.get(row.id, startDate, endDate);
+      const totalAdvances = advancesData.total;
       
       return {
+        id: row.id,
         name: row.name,
         hourly_rate: row.hourly_rate,
         days_present: row.days_present || 0,
         days_absent: Math.max(0, workerWorkDays - (row.days_present || 0)),
-        total_hours: row.total_hours || 0
+        total_hours: row.total_hours || 0,
+        total_advances: totalAdvances
       };
     });
     
