@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import './Workers.css';
 
 import API_URL from '../config';
-
 function Workers() {
   const navigate = useNavigate();
   const [workers, setWorkers] = useState([]);
@@ -12,6 +11,7 @@ function Workers() {
 
   useEffect(() => {
     loadWorkersAttendance();
+    // تحديث تلقائي كل 30 ثانية
     const interval = setInterval(loadWorkersAttendance, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -51,11 +51,7 @@ function Workers() {
 
   const formatTime = (time) => {
     if (!time) return '--:--';
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12;
-    return `${hour12}:${minutes} ${ampm}`;
+    return time.substring(0, 5); // HH:MM
   };
 
   const resetTodayData = async () => {
@@ -111,10 +107,9 @@ function Workers() {
             <ul className="info-list">
               <li>✅ سجل الحضور عند الوصول</li>
               <li>🍽️ سجل خروج ودخول الغدا (اختياري)</li>
-              <li>⚠️ لو سجلت خروج غداء، لازم تسجل الرجوع قبل الانصراف</li>
-              <li>🏠 سجل الانصراف عند المغادرة</li>
-              <li>⏰ يتم حساب ساعات العمل تلقائياً (بدون وقت الغداء)</li>
-              <li>🕐 جميع الأوقات بنظام 12 ساعة (AM/PM)</li>
+              <li>⚠️ لو سجلت خروج غدا، لازم تسجل الرجوع قبل الانصراف</li>
+              <li>🏁 سجل الانصراف عند المغادرة</li>
+              <li>⏰ يتم حساب ساعات العمل تلقائياً (بدون وقت الغدا)</li>
             </ul>
           )}
         </div>
@@ -123,7 +118,6 @@ function Workers() {
           <thead>
             <tr>
               <th>اسم العامل</th>
-              <th>الوظيفة</th>
               <th>تسجيل الحضور</th>
               <th>خروج الغدا</th>
               <th>دخول الغدا</th>
@@ -141,10 +135,6 @@ function Workers() {
                   >
                     {worker.name}
                   </button>
-                </td>
-
-                <td className="job-title">
-                  {worker.job_title || 'عامل'}
                 </td>
                 
                 <td>
@@ -190,7 +180,7 @@ function Workers() {
                       !worker.check_in 
                         ? 'يجب تسجيل الحضور أولاً' 
                         : (worker.lunch_out && !worker.lunch_in)
-                        ? 'يجب تسجيل العودة من الغداء أولاً'
+                        ? 'يجب تسجيل العودة من الغدا أولاً'
                         : ''
                     }
                   >
@@ -210,13 +200,6 @@ function Workers() {
       <div className="footer">
         <button onClick={resetTodayData} className="reset-btn">
           🔄 إعادة تعيين بيانات اليوم
-        </button>
-
-        <button 
-          onClick={() => navigate('/driver-trips')} 
-          className="driver-trips-link"
-        >
-          🚗 رحلات السائقين
         </button>
         
         <button 

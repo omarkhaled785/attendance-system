@@ -10,12 +10,9 @@ function AddWorkerForm({ onClose, onSuccess }) {
     national_id: '',
     date_joined: new Date().toLocaleDateString('en-CA'),
     photo: '',
-    hourly_rate: 50,
-    job_title: 'عامل'
+    hourly_rate: 50
   });
   const [loading, setLoading] = useState(false);
-  const [customJobTitle, setCustomJobTitle] = useState('');
-  const [showCustom, setShowCustom] = useState(false);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -65,28 +62,11 @@ function AddWorkerForm({ onClose, onSuccess }) {
     };
   };
 
-  const handleJobTitleChange = (value) => {
-    if (value === 'custom') {
-      setShowCustom(true);
-      setFormData({ ...formData, job_title: '' });
-    } else {
-      setShowCustom(false);
-      setFormData({ ...formData, job_title: value });
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const finalJobTitle = showCustom ? customJobTitle : formData.job_title;
-    
     if (!formData.name || !formData.age || !formData.phone || !formData.national_id || !formData.date_joined) {
       alert('جميع الحقول المطلوبة يجب ملؤها');
-      return;
-    }
-
-    if (!finalJobTitle) {
-      alert('يرجى اختيار أو إدخال المسمى الوظيفي');
       return;
     }
 
@@ -106,10 +86,7 @@ function AddWorkerForm({ onClose, onSuccess }) {
       const res = await fetch(`${API_URL}/workers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          job_title: finalJobTitle
-        })
+        body: JSON.stringify(formData)
       });
 
       if (res.ok) {
@@ -212,33 +189,6 @@ function AddWorkerForm({ onClose, onSuccess }) {
               />
             </div>
           </div>
-
-          <div className="form-group">
-            <label>المسمى الوظيفي *</label>
-            <select
-              value={showCustom ? 'custom' : formData.job_title}
-              onChange={(e) => handleJobTitleChange(e.target.value)}
-              className="select-field"
-              required
-            >
-              <option value="عامل">عامل</option>
-              <option value="سواق">سواق</option>
-              <option value="custom">أخرى (أدخل المسمى)</option>
-            </select>
-          </div>
-
-          {showCustom && (
-            <div className="form-group">
-              <label>أدخل المسمى الوظيفي *</label>
-              <input
-                type="text"
-                value={customJobTitle}
-                onChange={(e) => setCustomJobTitle(e.target.value)}
-                placeholder="مثال: فني، مشرف، إلخ"
-                required
-              />
-            </div>
-          )}
 
           <div className="form-group">
             <label>صورة البطاقة الشخصية (اختياري)</label>

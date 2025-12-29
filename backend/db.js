@@ -26,7 +26,7 @@ db.pragma('foreign_keys = ON');
 
 function initializeDatabase() {
   try {
-    // Create workers table with hourly_rate and job_title
+    // Create workers table with hourly_rate
     db.exec(`
       CREATE TABLE IF NOT EXISTS workers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,27 +37,19 @@ function initializeDatabase() {
         date_joined DATE NOT NULL,
         photo TEXT,
         hourly_rate REAL DEFAULT 50,
-        job_title TEXT DEFAULT 'عامل',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
     console.log('Workers table ready');
 
-    // Add job_title column if it doesn't exist
+    // Check if hourly_rate column exists, if not add it
     const tableInfo = db.prepare("PRAGMA table_info(workers)").all();
     const hasHourlyRate = tableInfo.some(col => col.name === 'hourly_rate');
-    const hasJobTitle = tableInfo.some(col => col.name === 'job_title');
     
     if (!hasHourlyRate) {
       console.log('Adding hourly_rate column to existing workers table...');
       db.exec('ALTER TABLE workers ADD COLUMN hourly_rate REAL DEFAULT 50');
       console.log('hourly_rate column added successfully');
-    }
-
-    if (!hasJobTitle) {
-      console.log('Adding job_title column to existing workers table...');
-      db.exec("ALTER TABLE workers ADD COLUMN job_title TEXT DEFAULT 'عامل'");
-      console.log('job_title column added successfully');
     }
 
     db.exec(`
@@ -75,37 +67,6 @@ function initializeDatabase() {
       )
     `);
     console.log('Attendance table ready');
-
-    // Create advances table for سلفة
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS advances (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        worker_id INTEGER NOT NULL,
-        amount REAL NOT NULL,
-        date DATE NOT NULL,
-        notes TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
-      )
-    `);
-    console.log('Advances table ready');
-
-    // Create driver trips table
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS driver_trips (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        driver_id INTEGER NOT NULL,
-        from_location TEXT NOT NULL,
-        to_location TEXT NOT NULL,
-        departure_time TIME,
-        arrival_time TIME,
-        date DATE NOT NULL,
-        notes TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (driver_id) REFERENCES workers(id) ON DELETE CASCADE
-      )
-    `);
-    console.log('Driver trips table ready');
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS settings (
@@ -126,8 +87,8 @@ function initializeDatabase() {
     const count = db.prepare('SELECT COUNT(*) as count FROM workers').get();
     if (count.count === 0 && !process.env.USER_DATA_PATH) {
       const insertWorker = db.prepare(`
-        INSERT INTO workers (name, age, phone, national_id, date_joined, hourly_rate, job_title) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO workers (name, age, phone, national_id, date_joined, hourly_rate) 
+        VALUES (?, ?, ?, ?, ?, ?)
       `);
 
       const insert = db.transaction((workers) => {
@@ -137,9 +98,9 @@ function initializeDatabase() {
       });
 
       insert([
-        ['أحمد محمد', 28, '01012345678', '29501011234567', '2024-01-15', 50, 'عامل'],
-        ['محمود علي', 32, '01023456789', '29201011234568', '2024-02-01', 55, 'سواق'],
-        ['خالد حسن', 25, '01034567890', '29801011234569', '2024-03-10', 45, 'عامل']
+        ['أحمد محمد', 28, '01012345678', '29501011234567', '2024-01-15', 50],
+        ['محمود علي', 32, '01023456789', '29201011234568', '2024-02-01', 55],
+        ['خالد حسن', 25, '01034567890', '29801011234569', '2024-03-10', 45]
       ]);
       console.log('Sample workers inserted');
     }
