@@ -8,7 +8,10 @@ function Drivers() {
   const [drivers, setDrivers] = useState([]);
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [trips, setTrips] = useState([]);
+  const [showAddDriver, setShowAddDriver] = useState(false);
   const [showAddTrip, setShowAddTrip] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
   const [newTrip, setNewTrip] = useState({
     from_location: 'مكان العمل',
     to_location: '',
@@ -28,11 +31,32 @@ function Drivers() {
 
   const loadDrivers = async () => {
     try {
-      const res = await fetch(`${API_URL}/drivers`);
-      const data = await res.json();
-      setDrivers(data);
+      setLoading(true);
+      // Load workers who are drivers (job_title = 'سواق')
+      const res = await fetch(`${API_URL}/workers`);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      
+      const allWorkers = await res.json();
+      // Filter only workers with job_title = 'سواق'
+      const driverWorkers = allWorkers.filter(worker => worker.job_title === 'سواق');
+      
+      console.log('All workers:', allWorkers);
+      console.log('Filtered drivers:', driverWorkers);
+      
+      setDrivers(driverWorkers);
+      
+      // Auto-select first driver if available
+      if (driverWorkers.length > 0 && !selectedDriver) {
+        setSelectedDriver(driverWorkers[0].id);
+      }
     } catch (error) {
       console.error('Error loading drivers:', error);
+      alert('حدث خطأ في تحميل السواقين: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -43,10 +67,17 @@ function Drivers() {
       const endDate = today.toLocaleDateString('en-CA');
       
       const res = await fetch(`${API_URL}/trips/${driverId}?startDate=${startDate}&endDate=${endDate}`);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      
       const data = await res.json();
+      console.log('Loaded trips:', data); // Debug log
       setTrips(data);
     } catch (error) {
       console.error('Error loading trips:', error);
+      alert('حدث خطأ في تحميل الرحلات: ' + error.message);
     }
   };
 
@@ -76,9 +107,12 @@ function Drivers() {
           notes: ''
         });
         loadTrips(selectedDriver);
+      } else {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'فشل إضافة الرحلة');
       }
     } catch (error) {
-      alert('حدث خطأ في إضافة الرحلة');
+      alert(`حدث خطأ في إضافة الرحلة: ${error.message}`);
     }
   };
 
@@ -93,9 +127,12 @@ function Drivers() {
 
       if (res.ok) {
         loadTrips(selectedDriver);
+      } else {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'فشل تسجيل الوقت');
       }
     } catch (error) {
-      alert('حدث خطأ في تسجيل الوقت');
+      alert(`حدث خطأ في تسجيل الوقت: ${error.message}`);
     }
   };
 
@@ -112,6 +149,20 @@ function Drivers() {
     return `${hours}:${minutes} ${period}`;
   };
 
+  if (loading) {
+    return (
+      <div className="drivers-container">
+        <div className="drivers-header">
+          <button onClick={() => navigate('/')} className="back-btn">
+            ← رجوع للصفحة الرئيسية
+          </button>
+          <h1>🚗 إدارة السواقين والرحلات</h1>
+        </div>
+        <div className="loading">جاري تحميل السواقين...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="drivers-container">
       <div className="drivers-header">
@@ -123,7 +174,8 @@ function Drivers() {
 
       <div className="drivers-content">
         <div className="drivers-sidebar">
-          <h3>السواقين</h3>
+          <h3>السواقين ({drivers.length})</h3>
+          
           <div className="drivers-list">
             {drivers.map(driver => (
               <button
@@ -138,10 +190,16 @@ function Drivers() {
           </div>
           
           {drivers.length === 0 && (
-            <p className="no-drivers">
-              لا يوجد سواقين مسجلين<br/>
-              يمكنك إضافة سواق من لوحة التحكم
-            </p>
+            <div className="no-drivers">
+              <p>لا يوجد سواقين مسجلين</p>
+              <p className="help-text">يمكنك إضافة سائق من لوحة التحكم</p>
+              <p className="help-text" style={{ fontSize: '0.9em', marginTop: '10px' }}>
+                عند إضافة عامل جديد، اختر "سواق" كوظيفة ليظهر هنا
+              </p>
+              <button onClick={() => navigate('/dashboard')} className="go-to-dashboard-btn">
+                الذهاب للوحة التحكم
+              </button>
+            </div>
           )}
         </div>
 
@@ -262,7 +320,7 @@ function Drivers() {
                     </tbody>
                   </table>
                 ) : (
-                  <p className="no-data">لا توجد رحلات لهذا السائق</p>
+                  <p className="no-data">لا توجد رحلات لهذا السائق في الشهر الحالي</p>
                 )}
               </div>
             </>

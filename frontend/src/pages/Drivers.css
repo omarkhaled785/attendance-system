@@ -343,3 +343,132 @@
     font-size: 0.8em;
   }
 }
+/* Add to Drivers.css */
+.loading-message {
+  text-align: center;
+  padding: 40px;
+  font-size: 18px;
+  color: #666;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 15px;
+  margin: 15px;
+  border-radius: 5px;
+  border: 1px solid #f5c6cb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.retry-btn {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.retry-btn:hover {
+  background-color: #c82333;
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.add-sample-driver-btn {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.add-sample-driver-btn:hover {
+  background-color: #5a6268;
+}
+
+.driver-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  width: 100%;
+}
+
+.driver-license {
+  font-size: 11px;
+  color: #6c757d;
+  margin-top: 2px;
+}
+
+.help-text {
+  font-size: 12px;
+  color: #6c757d;
+  margin-top: 5px;
+}
+
+.go-to-dashboard-btn {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  margin-top: 10px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.go-to-dashboard-btn:hover {
+  background-color: #0069d9;
+}
+
+.trip-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.refresh-btn {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.refresh-btn:hover {
+  background-color: #5a6268;
+}
+
+.add-sample-btn {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  margin-top: 15px;
+  cursor: pointer;
+}
+
+.add-sample-btn:hover {
+  background-color: #218838;
+}
+
+.no-trips {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}

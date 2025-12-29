@@ -278,3 +278,9 @@
     min-width: 80px;
   }
 }
+/* Add to Workers.css */
+.time-btn.recorded {
+  background-color: #4CAF50;
+  color: white;
+  font-weight: bold;
+}

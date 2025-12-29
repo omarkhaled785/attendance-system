@@ -823,3 +823,284 @@
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
   color: white !important;
 }
+
+/* Add to Dashboard.css */
+.invoice-btn {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-right: 5px;
+}
+
+.invoice-btn:hover {
+  background-color: #45a049;
+}
+
+.company-invoice-btn {
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  margin-left: 10px;
+}
+
+.company-invoice-btn:hover {
+  background-color: #0b7dda;
+}
+
+/* Add styles for job title display */
+.job-title-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: bold;
+  margin-left: 5px;
+}
+
+.job-title-badge.عامل {
+  background-color: #FFC107;
+  color: #333;
+}
+
+.job-title-badge.سواق {
+  background-color: #4CAF50;
+  color: white;
+}
+/* Add these styles to Dashboard.css */
+
+/* Button spacing */
+.bonus-btn, .advance-btn, .delete-btn, .invoice-btn {
+  margin: 2px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  border: none;
+  transition: all 0.3s ease;
+}
+
+/* Bonus button */
+.bonus-btn {
+  background-color: #FFC107;
+  color: #333;
+  margin-left: 5px;
+}
+
+.bonus-btn:hover {
+  background-color: #e0a800;
+}
+
+/* Advance button */
+.advance-btn {
+  background-color: #17a2b8;
+  color: white;
+  margin-left: 5px;
+  margin-right: 5px;
+}
+
+.advance-btn:hover {
+  background-color: #138496;
+}
+
+/* Delete button */
+.delete-btn {
+  background-color: #dc3545;
+  color: white;
+  margin-left: 5px;
+}
+
+.delete-btn:hover {
+  background-color: #c82333;
+}
+
+/* Invoice button */
+.invoice-btn {
+  background-color: #28a745;
+  color: white;
+  padding: 6px 15px;
+  margin-left: 5px;
+}
+
+.invoice-btn:hover {
+  background-color: #218838;
+}
+
+/* Job title badges spacing */
+.job-title-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: bold;
+  margin: 0 5px;
+  min-width: 60px;
+  text-align: center;
+}
+
+.job-title-badge.عامل {
+  background-color: #FFC107;
+  color: #333;
+}
+
+.job-title-badge.سواق {
+  background-color: #28a745;
+  color: white;
+}
+
+.job-title-badge.أخرى {
+  background-color: #17a2b8;
+  color: white;
+}
+
+.job-title-badge.هير, .job-title-badge.فوس {
+  background-color: #6f42c1;
+  color: white;
+}
+
+/* Table cell spacing */
+.data-table td {
+  padding: 12px 8px;
+  border-bottom: 1px solid #dee2e6;
+  vertical-align: middle;
+}
+
+.data-table th {
+  padding: 15px 8px;
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #495057;
+  text-align: right;
+  border-bottom: 2px solid #dee2e6;
+}
+
+/* Report table specific */
+.report-data table.data-table td,
+.report-data table.data-table th {
+  padding: 12px 10px;
+}
+
+/* Amount column styling */
+.amount {
+  font-weight: bold;
+  color: #28a745;
+  text-align: left;
+}
+
+/* Rate display button */
+.rate-display-btn {
+  background-color: #e9ecef;
+  color: #495057;
+  border: 1px solid #ced4da;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.rate-display-btn:hover {
+  background-color: #dee2e6;
+  border-color: #adb5bd;
+}
+
+/* Form actions spacing */
+.form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* Modal actions spacing */
+.modal-body .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 25px;
+}
+
+/* Report controls spacing */
+.report-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.report-controls > * {
+  margin: 2px;
+}
+
+/* Worker name link spacing */
+.worker-name-link {
+  background: none;
+  border: none;
+  color: #007bff;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 15px;
+  padding: 0;
+  text-align: right;
+}
+
+.worker-name-link:hover {
+  color: #0056b3;
+}
+
+/* Total row styling */
+.total-row {
+  background-color: #f8f9fa;
+  font-weight: bold;
+  border-top: 2px solid #dee2e6;
+}
+
+.total-row td {
+  padding: 14px 8px;
+  font-size: 15px;
+}
+
+/* Responsive table */
+@media (max-width: 1200px) {
+  .data-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  
+  .bonus-btn, .advance-btn, .delete-btn, .invoice-btn {
+    padding: 5px 8px;
+    font-size: 12px;
+    margin: 1px;
+  }
+}
+/* Add to Dashboard.css */
+.advances-amount {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-weight: 500;
+  display: inline-block;
+}
+
+.advances-amount.has-advances {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.advances-amount:not(.has-advances) {
+  color: #6c757d;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}

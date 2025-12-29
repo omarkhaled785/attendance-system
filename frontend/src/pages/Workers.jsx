@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Workers.css';
-
 import API_URL from '../config';
 function Workers() {
   const navigate = useNavigate();
@@ -11,7 +10,6 @@ function Workers() {
 
   useEffect(() => {
     loadWorkersAttendance();
-    // تحديث تلقائي كل 30 ثانية
     const interval = setInterval(loadWorkersAttendance, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -49,9 +47,17 @@ function Workers() {
     }
   };
 
-  const formatTime = (time) => {
+  const formatTime12Hour = (time) => {
     if (!time) return '--:--';
-    return time.substring(0, 5); // HH:MM
+    
+    const [hours24, minutes] = time.substring(0, 5).split(':');
+    let hours = parseInt(hours24);
+    const period = hours >= 12 ? 'م' : 'ص';
+    
+    if (hours > 12) hours -= 12;
+    if (hours === 0) hours = 12;
+    
+    return `${hours}:${minutes} ${period}`;
   };
 
   const resetTodayData = async () => {
@@ -106,10 +112,10 @@ function Workers() {
           {showInstructions && (
             <ul className="info-list">
               <li>✅ سجل الحضور عند الوصول</li>
-              <li>🍽️ سجل خروج ودخول الغدا (اختياري)</li>
-              <li>⚠️ لو سجلت خروج غدا، لازم تسجل الرجوع قبل الانصراف</li>
-              <li>🏁 سجل الانصراف عند المغادرة</li>
-              <li>⏰ يتم حساب ساعات العمل تلقائياً (بدون وقت الغدا)</li>
+              <li>🍽️ سجل خروج ودخول الغداء (اختياري)</li>
+              <li>⚠️ لو سجلت خروج غداء، لازم تسجل الرجوع قبل الانصراف</li>
+              <li>🏠 سجل الانصراف عند المغادرة</li>
+              <li>⏰ يتم حساب ساعات العمل تلقائياً (بدون وقت الغداء)</li>
             </ul>
           )}
         </div>
@@ -118,9 +124,10 @@ function Workers() {
           <thead>
             <tr>
               <th>اسم العامل</th>
+              <th>الوظيفة</th>
               <th>تسجيل الحضور</th>
-              <th>خروج الغدا</th>
-              <th>دخول الغدا</th>
+              <th>خروج الغداء</th>
+              <th>دخول الغداء</th>
               <th>تسجيل الانصراف</th>
               <th>إجمالي الساعات</th>
             </tr>
@@ -137,13 +144,15 @@ function Workers() {
                   </button>
                 </td>
                 
+                <td className="job-title">{worker.job_title || 'عامل'}</td>
+                
                 <td>
                   <button
                     className={`time-btn ${worker.check_in ? 'recorded' : ''}`}
                     onClick={() => recordTime(worker.id, 'check_in')}
                     disabled={worker.check_in}
                   >
-                    {worker.check_in ? formatTime(worker.check_in) : 'تسجيل'}
+                    {worker.check_in ? formatTime12Hour(worker.check_in) : 'تسجيل'}
                   </button>
                 </td>
 
@@ -153,7 +162,7 @@ function Workers() {
                     onClick={() => recordTime(worker.id, 'lunch_out')}
                     disabled={!worker.check_in || worker.lunch_out}
                   >
-                    {worker.lunch_out ? formatTime(worker.lunch_out) : 'تسجيل'}
+                    {worker.lunch_out ? formatTime12Hour(worker.lunch_out) : 'تسجيل'}
                   </button>
                 </td>
 
@@ -163,7 +172,7 @@ function Workers() {
                     onClick={() => recordTime(worker.id, 'lunch_in')}
                     disabled={!worker.lunch_out || worker.lunch_in}
                   >
-                    {worker.lunch_in ? formatTime(worker.lunch_in) : 'تسجيل'}
+                    {worker.lunch_in ? formatTime12Hour(worker.lunch_in) : 'تسجيل'}
                   </button>
                 </td>
 
@@ -180,11 +189,11 @@ function Workers() {
                       !worker.check_in 
                         ? 'يجب تسجيل الحضور أولاً' 
                         : (worker.lunch_out && !worker.lunch_in)
-                        ? 'يجب تسجيل العودة من الغدا أولاً'
+                        ? 'يجب تسجيل العودة من الغداء أولاً'
                         : ''
                     }
                   >
-                    {worker.check_out ? formatTime(worker.check_out) : 'تسجيل'}
+                    {worker.check_out ? formatTime12Hour(worker.check_out) : 'تسجيل'}
                   </button>
                 </td>
 
@@ -201,6 +210,13 @@ function Workers() {
         <button onClick={resetTodayData} className="reset-btn">
           🔄 إعادة تعيين بيانات اليوم
         </button>
+        
+        <button 
+  onClick={() => navigate('/drivers')} 
+  className="drivers-link"
+>
+  🚗 إدارة السواقين والرحلات
+</button>
         
         <button 
           onClick={() => navigate('/dashboard')} 

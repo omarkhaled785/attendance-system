@@ -5,9 +5,12 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   root: path.resolve(__dirname, 'frontend'),
-  base: './', // ← مهم جداً للـ Electron - يجعل المسارات نسبية
+  base: './', 
+  publicDir: 'public', 
   build: {
-    outDir: path.resolve(__dirname, 'frontend/dist'), // ✅ هنا    emptyOutDir: true,
+    outDir: path.resolve(__dirname, 'frontend/dist'),
+    emptyOutDir: true,
+    copyPublicDir: true, 
     rollupOptions: {
       output: {
         manualChunks: undefined

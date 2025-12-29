@@ -10,8 +10,10 @@ function AddWorkerForm({ onClose, onSuccess }) {
     national_id: '',
     date_joined: new Date().toLocaleDateString('en-CA'),
     photo: '',
-    hourly_rate: 50
+    hourly_rate: 50,
+    job_title: 'عامل'
   });
+  const [customJobTitle, setCustomJobTitle] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleImageChange = (e) => {
@@ -80,13 +82,20 @@ function AddWorkerForm({ onClose, onSuccess }) {
       return;
     }
 
+    const finalJobTitle = formData.job_title === 'أخرى' ? customJobTitle : formData.job_title;
+    
+    if (!finalJobTitle) {
+      alert('يرجى إدخال المسمى الوظيفي');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const res = await fetch(`${API_URL}/workers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({...formData, job_title: finalJobTitle})
       });
 
       if (res.ok) {
@@ -189,6 +198,32 @@ function AddWorkerForm({ onClose, onSuccess }) {
               />
             </div>
           </div>
+
+          <div className="form-group">
+            <label>المسمى الوظيفي *</label>
+            <select
+              value={formData.job_title}
+              onChange={(e) => setFormData({ ...formData, job_title: e.target.value })}
+              required
+            >
+              <option value="عامل">عامل</option>
+              <option value="سواق">سواق</option>
+              <option value="أخرى">أخرى...</option>
+            </select>
+          </div>
+
+          {formData.job_title === 'أخرى' && (
+            <div className="form-group">
+              <label>حدد المسمى الوظيفي *</label>
+              <input
+                type="text"
+                value={customJobTitle}
+                onChange={(e) => setCustomJobTitle(e.target.value)}
+                placeholder="مثال: فني، مشرف..."
+                required
+              />
+            </div>
+          )}
 
           <div className="form-group">
             <label>صورة البطاقة الشخصية (اختياري)</label>
