@@ -34,6 +34,7 @@ function createWindow() {
     width: 1400,
     height: 900,
     autoHideMenuBar: true,
+     paintWhenInitiallyHidden: true,
     title: 'نظام الحضور والانصراف',
     icon: isDev
       ? path.join(__dirname, '../icon.png')

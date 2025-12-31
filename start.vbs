@@ -1,14 +1,11 @@
-' Improved Attendance System Launcher
+' Proper Attendance System Launcher (Production Mode)
 Set WshShell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
-' Get script directory
 scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
-
-' Set working directory
 WshShell.CurrentDirectory = scriptDir
 
-' Check if app is already running
+' Prevent duplicate launch
 Set objWMIService = GetObject("winmgmts:\\.\root\cimv2")
 Set colProcesses = objWMIService.ExecQuery("SELECT * FROM Win32_Process WHERE Name = 'electron.exe'")
 
@@ -17,12 +14,7 @@ If colProcesses.Count > 0 Then
     WScript.Quit
 End If
 
-' Start the application
-WshShell.Run "cmd.exe /c npm run electron:dev", 0, False
-
-WScript.Sleep 2000
-
-' Optional: Show a starting message
-' MsgBox "جاري تشغيل نظام الحضور...", vbInformation, "نظام الحضور"
+' ⭐ Launch PRODUCTION build, NOT dev server
+WshShell.Run "cmd /c npm start", 0, False
 
 WScript.Quit
