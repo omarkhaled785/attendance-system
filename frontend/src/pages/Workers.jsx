@@ -10,6 +10,10 @@ function Workers() {
   const [loading, setLoading] = useState(true);
   const [showInstructions, setShowInstructions] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [workersPerPage] = useState(6); // Show 6 workers per page
 
   useEffect(() => {
     loadWorkersAttendance();
@@ -27,7 +31,31 @@ function Workers() {
       );
       setFilteredWorkers(filtered);
     }
+    setCurrentPage(1); // Reset to first page when search changes
   }, [searchTerm, workers]);
+
+  // Calculate pagination
+  const indexOfLastWorker = currentPage * workersPerPage;
+  const indexOfFirstWorker = indexOfLastWorker - workersPerPage;
+  const currentWorkers = filteredWorkers.slice(indexOfFirstWorker, indexOfLastWorker);
+  const totalPages = Math.ceil(filteredWorkers.length / workersPerPage);
+
+  // Navigation functions
+  const nextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const prevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    };
+  };
+
+  const goToPage = (pageNumber) => {
+    setCurrentPage(pageNumber);
+  };
 
   const loadWorkersAttendance = async () => {
     try {
@@ -179,7 +207,7 @@ function Workers() {
             </tr>
           </thead>
           <tbody>
-            {filteredWorkers.map((worker) => (
+            {currentWorkers.map((worker) => (
               <tr key={worker.id}>
                 <td className="worker-name">
                   <button 
@@ -250,6 +278,39 @@ function Workers() {
             ))}
           </tbody>
         </table>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="pagination-controls">
+            <button 
+              onClick={prevPage} 
+              disabled={currentPage === 1}
+              className="pagination-btn"
+            >
+              السابق
+            </button>
+            
+            <div className="page-numbers">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(number => (
+                <button
+                  key={number}
+                  onClick={() => goToPage(number)}
+                  className={`page-number ${currentPage === number ? 'active' : ''}`}
+                >
+                  {number}
+                </button>
+              ))}
+            </div>
+            
+            <button 
+              onClick={nextPage} 
+              disabled={currentPage === totalPages}
+              className="pagination-btn"
+            >
+              التالي
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="footer">

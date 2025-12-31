@@ -1230,3 +1230,69 @@
     gap: 10px;
   }
 }
+
+
+/* Deduction button */
+.deduction-btn {
+  background-color: #ff6b35 !important;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-left: 5px;
+  transition: all 0.3s ease;
+}
+
+.deduction-btn:hover {
+  background-color: #e55a2b !important;
+  transform: scale(1.05);
+}
+
+/* Update action buttons container */
+.action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .action-buttons {
+    flex-direction: column;
+  }
+  
+  .deduction-btn {
+    margin-left: 0;
+    margin-top: 5px;
+  }
+}
+
+.deductions {
+  color: #ff6b35 !important;
+  font-weight: bold;
+}
+
+.form-group textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.form-group textarea:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.help-text {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #7f8c8d;
+  font-style: italic;
+}

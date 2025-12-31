@@ -1,5 +1,5 @@
 /* =====================================================
-   PDF Generator – Fixed with Logo & Yearly Data
+   PDF Generator – Updated with Deductions
    ===================================================== */
 
 import { amiriFontBase64 } from './arabicFont';
@@ -67,7 +67,7 @@ function addLogoToPDF(doc, logoBase64) {
 }
 
 /* =====================================================
-   📄 Worker Invoice (فاتورة عامل)
+   📄 Worker Invoice (فاتورة عامل) - Updated with deductions
    ===================================================== */
 export async function generateWorkerInvoice(data, logoBase64 = "") {
   try {
@@ -114,6 +114,7 @@ export async function generateWorkerInvoice(data, logoBase64 = "") {
     const totalHours = summary.totalHours || "0.00";
     const totalEarned = summary.totalEarned || "0.00";
     const totalAdvances = summary.totalAdvances || "0.00";
+    const totalDeductions = summary.totalDeductions || "0.00";
     const netAmount = summary.netAmount || "0.00";
 
     // Attendance Table
@@ -154,7 +155,7 @@ export async function generateWorkerInvoice(data, logoBase64 = "") {
     doc.setDrawColor(41, 128, 185);
     doc.setLineWidth(0.5);
     doc.setFillColor(240, 248, 255);
-    doc.rect(10, y - 5, 190, 55, 'FD');
+    doc.rect(10, y - 5, 190, 65, 'FD');
     
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
@@ -164,6 +165,8 @@ export async function generateWorkerInvoice(data, logoBase64 = "") {
     doc.text(`إجمالي المستحق: ${totalEarned} جنيه`, 195, y + 3, { align: "right" });
     y += 10;
     doc.text(`إجمالي السلف: ${totalAdvances} جنيه`, 195, y + 3, { align: "right" });
+    y += 10;
+    doc.text(`إجمالي الخصومات: ${totalDeductions} جنيه`, 195, y + 3, { align: "right" });
     y += 10;
     
     // Net amount with highlight
@@ -192,7 +195,7 @@ export async function generateWorkerInvoice(data, logoBase64 = "") {
 }
 
 /* =====================================================
-   🏢 Company Invoice (فاتورة الشركة) - FIXED YEARLY DATA
+   🏢 Company Invoice (فاتورة الشركة) - Updated with deductions
    ===================================================== */
 export async function generateCompanyInvoice(data, logoBase64 = "") {
   try {
@@ -233,7 +236,7 @@ export async function generateCompanyInvoice(data, logoBase64 = "") {
     doc.text(`الفترة: ${data.period}`, 195, 58, { align: "right" });
     doc.text(`تاريخ الإصدار: ${formatArabicDate(new Date())}`, 15, 58);
 
-    // Company Workers Table
+    // Company Workers Table with deductions
     const tableData = (data.workers || []).map(w => {
       return [
         w.name || "",
@@ -241,14 +244,16 @@ export async function generateCompanyInvoice(data, logoBase64 = "") {
         parseFloat(w.total_hours || 0).toFixed(2),
         parseFloat(w.earned || 0).toFixed(2),
         parseFloat(w.advances || 0).toFixed(2),
+        parseFloat(w.deductions || 0).toFixed(2),
         parseFloat(w.net_amount || 0).toFixed(2)
       ];
     });
 
-    // Calculate totals
+    // Calculate totals including deductions
     const totalHours = parseFloat(data.totalHours || 0).toFixed(2);
     const totalEarned = parseFloat(data.totalEarned || 0).toFixed(2);
     const totalAdvances = parseFloat(data.totalAdvances || 0).toFixed(2);
+    const totalDeductions = parseFloat(data.totalDeductions || 0).toFixed(2);
     const totalNet = parseFloat(data.totalNet || 0).toFixed(2);
 
     doc.autoTable({
@@ -259,6 +264,7 @@ export async function generateCompanyInvoice(data, logoBase64 = "") {
         "الساعات",
         "المستحق",
         "السلف",
+        "الخصومات",
         "الصافي"
       ]],
       body: tableData,
@@ -268,6 +274,7 @@ export async function generateCompanyInvoice(data, logoBase64 = "") {
         totalHours,
         totalEarned,
         totalAdvances,
+        totalDeductions,
         totalNet
       ]],
       styles: {
@@ -294,10 +301,11 @@ export async function generateCompanyInvoice(data, logoBase64 = "") {
       columnStyles: {
         0: { cellWidth: 35 },
         1: { cellWidth: 25 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 30 },
-        4: { cellWidth: 30 },
-        5: { cellWidth: 30, fontStyle: 'bold', textColor: [0, 128, 0] }
+        2: { cellWidth: 22 },
+        3: { cellWidth: 25 },
+        4: { cellWidth: 25 },
+        5: { cellWidth: 25 },
+        6: { cellWidth: 25, fontStyle: 'bold', textColor: [0, 128, 0] }
       }
     });
 
@@ -307,7 +315,7 @@ export async function generateCompanyInvoice(data, logoBase64 = "") {
     doc.setDrawColor(41, 128, 185);
     doc.setLineWidth(0.5);
     doc.setFillColor(240, 248, 255);
-    doc.rect(10, y - 5, 190, 55, 'FD');
+    doc.rect(10, y - 5, 190, 65, 'FD');
     
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
@@ -317,6 +325,8 @@ export async function generateCompanyInvoice(data, logoBase64 = "") {
     doc.text(`إجمالي المستحق: ${totalEarned} جنيه`, 195, y + 3, { align: "right" });
     y += 10;
     doc.text(`إجمالي السلف: ${totalAdvances} جنيه`, 195, y + 3, { align: "right" });
+    y += 10;
+    doc.text(`إجمالي الخصومات: ${totalDeductions} جنيه`, 195, y + 3, { align: "right" });
     y += 10;
     
     // Net amount with highlight
@@ -345,7 +355,7 @@ export async function generateCompanyInvoice(data, logoBase64 = "") {
 }
 
 /* =====================================================
-   📊 Daily Report (تقرير يومي)
+   📊 Daily Report (تقرير يومي) - Updated with deductions
    ===================================================== */
 export async function generateDailyReport(data, logoBase64 = "") {
   try {
@@ -390,13 +400,14 @@ export async function generateDailyReport(data, logoBase64 = "") {
     doc.text(`تاريخ التقرير: ${arabicDate}`, 148, 50, { align: "center" });
     doc.text(`تاريخ الإصدار: ${formatArabicDate(new Date())}`, 15, 50);
 
-    // Daily Report Table
+    // Daily Report Table with deductions
     const tableData = (data.workers || []).map(worker => {
       const hours = parseFloat(worker.total_hours || 0);
       const rate = parseFloat(worker.hourly_rate || 50);
       const earned = hours * rate;
       const advances = parseFloat(worker.advances || 0);
-      const net = earned - advances;
+      const deductions = parseFloat(worker.deductions || 0);
+      const net = earned - advances - deductions;
 
       return [
         worker.name || "",
@@ -407,15 +418,17 @@ export async function generateDailyReport(data, logoBase64 = "") {
         rate.toFixed(2),
         earned.toFixed(2),
         advances.toFixed(2),
+        deductions.toFixed(2),
         net.toFixed(2)
       ];
     });
 
-    // Calculate totals
+    // Calculate totals including deductions
     const totalHours = tableData.reduce((sum, row) => sum + parseFloat(row[4]), 0);
     const totalEarned = tableData.reduce((sum, row) => sum + parseFloat(row[6]), 0);
     const totalAdvances = tableData.reduce((sum, row) => sum + parseFloat(row[7]), 0);
-    const totalNet = totalEarned - totalAdvances;
+    const totalDeductions = tableData.reduce((sum, row) => sum + parseFloat(row[8]), 0);
+    const totalNet = totalEarned - totalAdvances - totalDeductions;
 
     doc.autoTable({
       startY: 60,
@@ -428,6 +441,7 @@ export async function generateDailyReport(data, logoBase64 = "") {
         "سعر الساعة",
         "المستحق",
         "السلف",
+        "الخصومات",
         "الصافي"
       ]],
       body: tableData,
@@ -440,6 +454,7 @@ export async function generateDailyReport(data, logoBase64 = "") {
         "",
         totalEarned.toFixed(2),
         totalAdvances.toFixed(2),
+        totalDeductions.toFixed(2),
         totalNet.toFixed(2)
       ]],
       styles: {
@@ -484,7 +499,7 @@ export async function generateDailyReport(data, logoBase64 = "") {
 }
 
 /* =====================================================
-   🗓️ Monthly Report (تقرير شهري)
+   🗓️ Monthly Report (تقرير شهري) - Updated with deductions
    ===================================================== */
 export async function generateMonthlyReport(data, logoBase64 = "") {
   try {
@@ -521,7 +536,7 @@ export async function generateMonthlyReport(data, logoBase64 = "") {
     doc.text(`الفترة: ${data.period}`, 195, 50, { align: "right" });
     doc.text(`تاريخ الإصدار: ${formatArabicDate(new Date())}`, 15, 50);
 
-    // Monthly Report Table
+    // Monthly Report Table with deductions
     const tableData = (data.workers || []).map(worker => {
       return [
         worker.name || "",
@@ -531,17 +546,19 @@ export async function generateMonthlyReport(data, logoBase64 = "") {
         parseFloat(worker.total_hours || 0).toFixed(2),
         parseFloat(worker.earned || 0).toFixed(2),
         parseFloat(worker.advances || 0).toFixed(2),
+        parseFloat(worker.deductions || 0).toFixed(2),
         parseFloat(worker.net_amount || 0).toFixed(2)
       ];
     });
 
-    // Calculate totals
+    // Calculate totals including deductions
     const totalPresent = tableData.reduce((sum, row) => sum + parseInt(row[2]), 0);
     const totalAbsent = tableData.reduce((sum, row) => sum + parseInt(row[3]), 0);
     const totalHours = tableData.reduce((sum, row) => sum + parseFloat(row[4]), 0);
     const totalEarned = tableData.reduce((sum, row) => sum + parseFloat(row[5]), 0);
     const totalAdvances = tableData.reduce((sum, row) => sum + parseFloat(row[6]), 0);
-    const totalNet = totalEarned - totalAdvances;
+    const totalDeductions = tableData.reduce((sum, row) => sum + parseFloat(row[7]), 0);
+    const totalNet = totalEarned - totalAdvances - totalDeductions;
 
     doc.autoTable({
       startY: 60,
@@ -553,6 +570,7 @@ export async function generateMonthlyReport(data, logoBase64 = "") {
         "الساعات",
         "المستحق",
         "السلف",
+        "الخصومات",
         "الصافي"
       ]],
       body: tableData,
@@ -564,6 +582,7 @@ export async function generateMonthlyReport(data, logoBase64 = "") {
         totalHours.toFixed(2),
         totalEarned.toFixed(2),
         totalAdvances.toFixed(2),
+        totalDeductions.toFixed(2),
         totalNet.toFixed(2)
       ]],
       styles: {
@@ -593,7 +612,7 @@ export async function generateMonthlyReport(data, logoBase64 = "") {
     let y = doc.lastAutoTable.finalY + 15;
     
     doc.setFillColor(240, 248, 255);
-    doc.rect(10, y - 5, 190, 25, 'F');
+    doc.rect(10, y - 5, 190, 35, 'F');
     
     doc.setFontSize(11);
     doc.setTextColor(0, 0, 0);
@@ -601,6 +620,8 @@ export async function generateMonthlyReport(data, logoBase64 = "") {
     doc.text(`إجمالي أيام الحضور: ${totalPresent} يوم`, 195, y + 3, { align: "right" });
     y += 8;
     doc.text(`إجمالي أيام الغياب: ${totalAbsent} يوم`, 195, y + 3, { align: "right" });
+    y += 8;
+    doc.text(`إجمالي الخصومات: ${totalDeductions.toFixed(2)} جنيه`, 195, y + 3, { align: "right" });
     y += 8;
     
     // Highlight net total

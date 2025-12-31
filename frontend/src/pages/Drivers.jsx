@@ -12,6 +12,11 @@ function Drivers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
+  // New states for all trips view
+  const [showAllTrips, setShowAllTrips] = useState(false);
+  const [allTrips, setAllTrips] = useState([]);
+  const [loadingAllTrips, setLoadingAllTrips] = useState(false);
+  
   const [newTrip, setNewTrip] = useState({
     from_location: 'مكان العمل',
     to_location: '',
@@ -81,6 +86,46 @@ function Drivers() {
     }
   };
 
+  // Function to load all trips for current month
+  const loadAllTrips = async () => {
+    try {
+      setLoadingAllTrips(true);
+      setError('');
+      
+      const today = new Date();
+      const startDate = new Date(today.getFullYear(), today.getMonth(), 1).toLocaleDateString('en-CA');
+      const endDate = today.toLocaleDateString('en-CA');
+      
+      // First get all drivers
+      const driversRes = await fetch(`${API_URL}/drivers`);
+      const driversData = await driversRes.json();
+      
+      // Load trips for all drivers
+      const allTripsData = [];
+      
+      for (const driver of driversData) {
+        const tripsRes = await fetch(`${API_URL}/trips/${driver.id}?startDate=${startDate}&endDate=${endDate}`);
+        const driverTrips = await tripsRes.json();
+        
+        driverTrips.forEach(trip => {
+          allTripsData.push({
+            ...trip,
+            driver_name: driver.name,
+            driver_phone: driver.phone
+          });
+        });
+      }
+      
+      setAllTrips(allTripsData);
+      setShowAllTrips(true);
+    } catch (error) {
+      console.error('Error loading all trips:', error);
+      setError('حدث خطأ في تحميل جميع الرحلات: ' + error.message);
+    } finally {
+      setLoadingAllTrips(false);
+    }
+  };
+
   const addTrip = async () => {
     if (!newTrip.to_location) {
       alert('من فضلك أدخل الوجهة');
@@ -144,6 +189,31 @@ function Drivers() {
     } catch (error) {
       console.error('Error recording time:', error);
       alert(`حدث خطأ في تسجيل الوقت: ${error.message}`);
+    }
+  };
+
+  // Function to delete trip
+  const deleteTrip = async (tripId, tripDetails) => {
+    if (!confirm(`هل أنت متأكد من حذف هذه الرحلة؟\nمن: ${tripDetails.from_location} إلى: ${tripDetails.to_location}\nالتاريخ: ${tripDetails.date}`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/trips/${tripId}`, {
+        method: 'DELETE'
+      });
+      
+      const result = await res.json();
+      
+      if (res.ok) {
+        alert('تم حذف الرحلة بنجاح');
+        loadTrips(selectedDriver);
+      } else {
+        throw new Error(result.error || 'فشل حذف الرحلة');
+      }
+    } catch (error) {
+      console.error('Error deleting trip:', error);
+      alert(`حدث خطأ في حذف الرحلة: ${error.message}`);
     }
   };
 
@@ -248,9 +318,14 @@ function Drivers() {
             <>
               <div className="trips-header">
                 <h3>رحلات السائق</h3>
-                <button onClick={() => setShowAddTrip(true)} className="add-trip-btn">
-                  ➕ إضافة رحلة جديدة
-                </button>
+                <div className="trips-header-actions">
+                  <button onClick={() => setShowAddTrip(true)} className="add-trip-btn">
+                    ➕ إضافة رحلة جديدة
+                  </button>
+                  <button onClick={loadAllTrips} className="all-trips-btn">
+                    🚗 جميع الرحلات
+                  </button>
+                </div>
               </div>
 
               {showAddTrip && (
@@ -319,6 +394,7 @@ function Drivers() {
                         <th>وقت النهاية</th>
                         <th>ملاحظات</th>
                         <th>الحالة</th>
+                        <th>الإجراءات</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -358,6 +434,15 @@ function Drivers() {
                               {trip.end_time ? 'مكتملة' : trip.start_time ? 'جارية' : 'معلقة'}
                             </span>
                           </td>
+                          <td>
+                            <button
+                              onClick={() => deleteTrip(trip.id, trip)}
+                              className="delete-trip-btn"
+                              title="حذف الرحلة"
+                            >
+                              🗑️
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -389,6 +474,65 @@ function Drivers() {
           )}
         </div>
       </div>
+
+      {/* All Trips Modal */}
+      {showAllTrips && (
+        <div className="modal-overlay" onClick={() => setShowAllTrips(false)}>
+          <div className="modal-content wide-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>جميع الرحلات لهذا الشهر</h2>
+              <button className="close-btn" onClick={() => setShowAllTrips(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              {loadingAllTrips ? (
+                <div className="loading">جاري تحميل الرحلات...</div>
+              ) : allTrips.length > 0 ? (
+                <table className="trips-table">
+                  <thead>
+                    <tr>
+                      <th>السائق</th>
+                      <th>رقم الهاتف</th>
+                      <th>التاريخ</th>
+                      <th>من</th>
+                      <th>إلى</th>
+                      <th>وقت البداية</th>
+                      <th>وقت النهاية</th>
+                      <th>ملاحظات</th>
+                      <th>الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allTrips.map(trip => (
+                      <tr key={trip.id}>
+                        <td>{trip.driver_name}</td>
+                        <td>{trip.driver_phone}</td>
+                        <td>{new Date(trip.date).toLocaleDateString('ar-EG')}</td>
+                        <td>{trip.from_location}</td>
+                        <td>{trip.to_location}</td>
+                        <td>{trip.start_time ? formatTime12Hour(trip.start_time) : '--'}</td>
+                        <td>{trip.end_time ? formatTime12Hour(trip.end_time) : '--'}</td>
+                        <td>{trip.notes || '--'}</td>
+                        <td>
+                          <span className={`status-badge ${trip.end_time ? 'completed' : trip.start_time ? 'in-progress' : 'pending'}`}>
+                            {trip.end_time ? 'مكتملة' : trip.start_time ? 'جارية' : 'معلقة'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p>لا توجد رحلات لهذا الشهر</p>
+              )}
+              <div className="form-actions">
+                <button onClick={() => setShowAllTrips(false)} className="cancel-btn">
+                  إغلاق
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

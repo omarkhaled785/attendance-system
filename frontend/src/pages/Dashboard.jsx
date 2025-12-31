@@ -4,8 +4,6 @@ import AddWorkerForm from './AddWorkerForm';
 import './Dashboard.css';
 import API_URL from '../config';
 
-// Import PDF generator
-
 function Dashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('workers');
@@ -40,19 +38,28 @@ function Dashboard() {
   // Invoice states
   const [showWorkerInvoice, setShowWorkerInvoice] = useState(false);
   const [selectedWorkerForInvoice, setSelectedWorkerForInvoice] = useState(null);
-  const [showCompanyInvoice, setShowCompanyInvoice] = useState(false); // NEW
+  const [showCompanyInvoice, setShowCompanyInvoice] = useState(false);
   const [invoiceMonth, setInvoiceMonth] = useState(new Date().getMonth() + 1);
   const [invoiceYear, setInvoiceYear] = useState(new Date().getFullYear());
-  const [invoiceType, setInvoiceType] = useState('monthly'); // NEW: daily, weekly, monthly, yearly
-  const [invoiceDate, setInvoiceDate] = useState(new Date().toLocaleDateString('en-CA')); // NEW
+  const [invoiceType, setInvoiceType] = useState('monthly');
+  const [invoiceDate, setInvoiceDate] = useState(new Date().toLocaleDateString('en-CA'));
   
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [advanceWorkerId, setAdvanceWorkerId] = useState(null);
   const [advanceAmount, setAdvanceAmount] = useState('');
   const [advanceDate, setAdvanceDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [advanceNotes, setAdvanceNotes] = useState('');
-const [searchTerm, setSearchTerm] = useState('');
-const [filteredWorkers, setFilteredWorkers] = useState([]);
+
+  // Deduction states - NEW
+  const [showDeductionModal, setShowDeductionModal] = useState(false);
+  const [deductionWorkerId, setDeductionWorkerId] = useState(null);
+  const [deductionAmount, setDeductionAmount] = useState('');
+  const [deductionReason, setDeductionReason] = useState('');
+  const [deductionDate, setDeductionDate] = useState(new Date().toLocaleDateString('en-CA'));
+  const [deductionNotes, setDeductionNotes] = useState('');
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredWorkers, setFilteredWorkers] = useState([]);
 
   useEffect(() => {
     loadWorkers();
@@ -63,53 +70,65 @@ const [filteredWorkers, setFilteredWorkers] = useState([]);
   }, [activeTab]);
 
   useEffect(() => {
-  if (searchTerm.trim() === '') {
-    setFilteredWorkers(workers);
-  } else {
-    const filtered = workers.filter(worker =>
-      worker.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      worker.phone.includes(searchTerm) ||
-      worker.national_id.includes(searchTerm) ||
-      (worker.job_title && worker.job_title.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-    setFilteredWorkers(filtered);
-  }
-}, [searchTerm, workers]);
+    if (searchTerm.trim() === '') {
+      setFilteredWorkers(workers);
+    } else {
+      const filtered = workers.filter(worker =>
+        worker.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        worker.phone.includes(searchTerm) ||
+        worker.national_id.includes(searchTerm) ||
+        (worker.job_title && worker.job_title.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+      setFilteredWorkers(filtered);
+    }
+  }, [searchTerm, workers]);
 
   const loadWorkers = async () => {
-  try {
-    const res = await fetch(`${API_URL}/workers`);
-    const data = await res.json();
-    
-    const workersWithAdvances = await Promise.all(
-      data.map(async (worker) => {
-        try {
-          const today = new Date();
-          const startDate = new Date(today.getFullYear(), today.getMonth(), 1).toLocaleDateString('en-CA');
-          const endDate = today.toLocaleDateString('en-CA');
-          
-          const advancesRes = await fetch(`${API_URL}/advances/total/${worker.id}?startDate=${startDate}&endDate=${endDate}`);
-          const advancesData = await advancesRes.json();
-          
-          return {
-            ...worker,
-            advances: advancesData.total || 0
-          };
-        } catch (error) {
-          return { ...worker, advances: 0 };
-        }
-      })
-    );
-    
-    setWorkers(workersWithAdvances);
-    setFilteredWorkers(workersWithAdvances); 
-  } catch (error) {
-    console.error('Error loading workers:', error);
-  }
-};
+    try {
+      const res = await fetch(`${API_URL}/workers`);
+      const data = await res.json();
+      
+      const workersWithFinances = await Promise.all(
+        data.map(async (worker) => {
+          try {
+            const today = new Date();
+            const startDate = new Date(today.getFullYear(), today.getMonth(), 1).toLocaleDateString('en-CA');
+            const endDate = today.toLocaleDateString('en-CA');
+            
+            // Get advances
+            const advancesRes = await fetch(`${API_URL}/advances/total/${worker.id}?startDate=${startDate}&endDate=${endDate}`);
+            const advancesData = await advancesRes.json();
+            
+            // Get deductions - NEW
+            const deductionsRes = await fetch(`${API_URL}/deductions/total/${worker.id}?startDate=${startDate}&endDate=${endDate}`);
+            const deductionsData = await deductionsRes.json();
+            
+            return {
+              ...worker,
+              advances: advancesData.total || 0,
+              deductions: deductionsData.total || 0
+            };
+          } catch (error) {
+            return { ...worker, advances: 0, deductions: 0 };
+          }
+        })
+      );
+      
+      setWorkers(workersWithFinances);
+      setFilteredWorkers(workersWithFinances); 
+    } catch (error) {
+      console.error('Error loading workers:', error);
+    }
+  };
 
   const calculateTotals = () => {
-    if (reportData.length === 0) return { totalHours: 0, totalAmount: 0, totalAdvances: 0, totalNet: 0 };
+    if (reportData.length === 0) return { 
+      totalHours: 0, 
+      totalAmount: 0, 
+      totalAdvances: 0, 
+      totalDeductions: 0, 
+      totalNet: 0 
+    };
     
     const totalHours = reportData.reduce((sum, row) => sum + (parseFloat(row.total_hours) || 0), 0);
     const totalAmount = reportData.reduce((sum, row) => {
@@ -118,12 +137,14 @@ const [filteredWorkers, setFilteredWorkers] = useState([]);
     }, 0);
     
     const totalAdvances = reportData.reduce((sum, row) => sum + (parseFloat(row.advances) || 0), 0);
-    const totalNet = totalAmount - totalAdvances;
+    const totalDeductions = reportData.reduce((sum, row) => sum + (parseFloat(row.deductions) || 0), 0);
+    const totalNet = totalAmount - totalAdvances - totalDeductions;
     
     return { 
       totalHours: totalHours.toFixed(2), 
       totalAmount: totalAmount.toFixed(2),
       totalAdvances: totalAdvances.toFixed(2),
+      totalDeductions: totalDeductions.toFixed(2),
       totalNet: totalNet.toFixed(2)
     };
   };
@@ -151,32 +172,34 @@ const [filteredWorkers, setFilteredWorkers] = useState([]);
     const BOM = '\uFEFF';
     
     if (reportType === 'daily') {
-      csvContent = BOM + 'الاسم,الوظيفة,وقت الحضور,وقت الانصراف,إجمالي الساعات,سعر الساعة,المستحق,السلف,الصافي\n';
+      csvContent = BOM + 'الاسم,الوظيفة,وقت الحضور,وقت الانصراف,إجمالي الساعات,سعر الساعة,المستحق,السلف,الخصومات,الصافي\n';
       reportData.forEach(row => {
         const rate = row.hourly_rate || 50;
         const hours = parseFloat(row.total_hours) || 0;
         const earned = hours * rate;
         const advances = parseFloat(row.advances) || 0;
-        const net = earned - advances;
+        const deductions = parseFloat(row.deductions) || 0;
+        const net = earned - advances - deductions;
         
-        csvContent += `"${row.name || ''}","${row.job_title || 'عامل'}","${row.check_in || '--'}","${row.check_out || '--'}","${hours}","${rate}","${earned.toFixed(2)}","${advances.toFixed(2)}","${net.toFixed(2)}"\n`;
+        csvContent += `"${row.name || ''}","${row.job_title || 'عامل'}","${row.check_in || '--'}","${row.check_out || '--'}","${hours}","${rate}","${earned.toFixed(2)}","${advances.toFixed(2)}","${deductions.toFixed(2)}","${net.toFixed(2)}"\n`;
       });
     } else {
       csvContent = BOM + (reportType === 'monthly' 
-        ? 'الاسم,الوظيفة,أيام الحضور,أيام الغياب,إجمالي الساعات,سعر الساعة,المستحق,السلف,الصافي\n'
-        : 'الاسم,الوظيفة,أيام الحضور,إجمالي الساعات,سعر الساعة,المستحق,السلف,الصافي\n');
+        ? 'الاسم,الوظيفة,أيام الحضور,أيام الغياب,إجمالي الساعات,سعر الساعة,المستحق,السلف,الخصومات,الصافي\n'
+        : 'الاسم,الوظيفة,أيام الحضور,إجمالي الساعات,سعر الساعة,المستحق,السلف,الخصومات,الصافي\n');
       
       reportData.forEach(row => {
         const rate = row.hourly_rate || 50;
         const hours = parseFloat(row.total_hours) || 0;
         const earned = hours * rate;
         const advances = parseFloat(row.advances) || 0;
-        const net = earned - advances;
+        const deductions = parseFloat(row.deductions) || 0;
+        const net = earned - advances - deductions;
         
         if (reportType === 'monthly') {
-          csvContent += `"${row.name || ''}","${row.job_title || 'عامل'}","${row.days_present || 0}","${row.days_absent || 0}","${hours}","${rate}","${earned.toFixed(2)}","${advances.toFixed(2)}","${net.toFixed(2)}"\n`;
+          csvContent += `"${row.name || ''}","${row.job_title || 'عامل'}","${row.days_present || 0}","${row.days_absent || 0}","${hours}","${rate}","${earned.toFixed(2)}","${advances.toFixed(2)}","${deductions.toFixed(2)}","${net.toFixed(2)}"\n`;
         } else {
-          csvContent += `"${row.name || ''}","${row.job_title || 'عامل'}","${row.days_present || 0}","${hours}","${rate}","${earned.toFixed(2)}","${advances.toFixed(2)}","${net.toFixed(2)}"\n`;
+          csvContent += `"${row.name || ''}","${row.job_title || 'عامل'}","${row.days_present || 0}","${hours}","${rate}","${earned.toFixed(2)}","${advances.toFixed(2)}","${deductions.toFixed(2)}","${net.toFixed(2)}"\n`;
         }
       });
     }
@@ -184,14 +207,15 @@ const [filteredWorkers, setFilteredWorkers] = useState([]);
     // Add totals row
     const totals = calculateTotals();
     const totalAdvances = reportData.reduce((sum, row) => sum + (parseFloat(row.advances) || 0), 0);
-    const totalNet = totals.totalAmount - totalAdvances;
+    const totalDeductions = reportData.reduce((sum, row) => sum + (parseFloat(row.deductions) || 0), 0);
+    const totalNet = totals.totalAmount - totalAdvances - totalDeductions;
     
     if (reportType === 'daily') {
-      csvContent += `"الإجمالي","","","","${totals.totalHours}","","${totals.totalAmount}","${totalAdvances.toFixed(2)}","${totalNet.toFixed(2)}"\n`;
+      csvContent += `"الإجمالي","","","","${totals.totalHours}","","${totals.totalAmount}","${totalAdvances.toFixed(2)}","${totalDeductions.toFixed(2)}","${totalNet.toFixed(2)}"\n`;
     } else if (reportType === 'monthly') {
-      csvContent += `"الإجمالي","","","","${totals.totalHours}","","${totals.totalAmount}","${totalAdvances.toFixed(2)}","${totalNet.toFixed(2)}"\n`;
+      csvContent += `"الإجمالي","","","","${totals.totalHours}","","${totals.totalAmount}","${totalAdvances.toFixed(2)}","${totalDeductions.toFixed(2)}","${totalNet.toFixed(2)}"\n`;
     } else {
-      csvContent += `"الإجمالي","","","${totals.totalHours}","","${totals.totalAmount}","${totalAdvances.toFixed(2)}","${totalNet.toFixed(2)}"\n`;
+      csvContent += `"الإجمالي","","","${totals.totalHours}","","${totals.totalAmount}","${totalAdvances.toFixed(2)}","${totalDeductions.toFixed(2)}","${totalNet.toFixed(2)}"\n`;
     }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -402,6 +426,50 @@ const [filteredWorkers, setFilteredWorkers] = useState([]);
     }
   };
 
+  // Deduction functions - NEW
+  const openDeductionModal = (workerId) => {
+    setDeductionWorkerId(workerId);
+    setDeductionAmount('');
+    setDeductionReason('');
+    setDeductionDate(new Date().toLocaleDateString('en-CA'));
+    setDeductionNotes('');
+    setShowDeductionModal(true);
+  };
+
+  const addDeduction = async () => {
+    if (!deductionAmount || parseFloat(deductionAmount) <= 0) {
+      alert('من فضلك أدخل مبلغ صحيح');
+      return;
+    }
+    
+    if (!deductionReason) {
+      alert('من فضلك أدخل سبب الخصم');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/deductions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          worker_id: deductionWorkerId,
+          amount: parseFloat(deductionAmount),
+          reason: deductionReason,
+          date: deductionDate,
+          notes: deductionNotes
+        })
+      });
+
+      if (res.ok) {
+        alert('تم إضافة الخصم بنجاح');
+        setShowDeductionModal(false);
+        loadWorkers();
+      }
+    } catch (error) {
+      alert('حدث خطأ في إضافة الخصم');
+    }
+  };
+
   const createBackup = async () => {
     try {
       const res = await fetch(`${API_URL}/backup/create`, { method: 'POST' });
@@ -455,95 +523,95 @@ const [filteredWorkers, setFilteredWorkers] = useState([]);
     }
   };
 
-const generateWorkerInvoicePDF = async (workerId) => {
-  try {
-    const res = await fetch(
-      `${API_URL}/workers/${workerId}/full-report?year=${invoiceYear}&month=${invoiceMonth}`
-    );
-    const data = await res.json();
+  const generateWorkerInvoicePDF = async (workerId) => {
+    try {
+      const res = await fetch(
+        `${API_URL}/workers/${workerId}/full-report?year=${invoiceYear}&month=${invoiceMonth}`
+      );
+      const data = await res.json();
 
-    if (!data || !data.worker) {
-      alert("لا توجد بيانات للفاتورة");
-      return;
+      if (!data || !data.worker) {
+        alert("لا توجد بيانات للفاتورة");
+        return;
+      }
+
+      const settingsRes = await fetch(`${API_URL}/settings`);
+      const settings = await settingsRes.json();
+
+      // ✅ dynamic import الصحيح
+      const { generateWorkerInvoice } = await import('../utils/pdfGenerator');
+
+      await generateWorkerInvoice(
+        {
+          ...data,
+          companyName: settings.company_name,
+          period: `${invoiceMonth}/${invoiceYear}`
+        },
+        settings.company_logo
+      );
+
+    } catch (error) {
+      console.error('❌ Error generating worker invoice:', error);
+      alert('حدث خطأ في إنشاء فاتورة العامل');
     }
+  };
 
-    const settingsRes = await fetch(`${API_URL}/settings`);
-    const settings = await settingsRes.json();
+  const generateCompanyInvoicePDF = async () => {
+    try {
+      console.log("📊 Fetching company invoice data...");
+      
+      let url = `${API_URL}/invoice/company?`;
+      let periodText = '';
+      
+      // Build URL based on invoice type
+      if (invoiceType === 'daily') {
+        url += `date=${invoiceDate}&type=daily`;
+        periodText = invoiceDate;
+      } else if (invoiceType === 'weekly') {
+        url += `date=${invoiceDate}&type=weekly`;
+        const weekEnd = new Date(invoiceDate);
+        const weekStart = new Date(weekEnd);
+        weekStart.setDate(weekStart.getDate() - 6);
+        periodText = `${weekStart.toLocaleDateString('en-CA')} إلى ${invoiceDate}`;
+      } else if (invoiceType === 'monthly') {
+        url += `year=${invoiceYear}&month=${invoiceMonth}&type=monthly`;
+        const arabicMonths = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 
+                              'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+        periodText = `${arabicMonths[invoiceMonth - 1]} ${invoiceYear}`;
+      } else if (invoiceType === 'yearly') {
+        url += `year=${invoiceYear}&type=yearly`;
+        periodText = `${invoiceYear}`;
+      }
+      
+      const res = await fetch(url);
+      
+      if (!res.ok) {
+        throw new Error(`HTTP Error: ${res.status}`);
+      }
+      
+      const data = await res.json();
+      console.log("✅ Received data:", data);
 
-    // ✅ dynamic import الصحيح
-    const { generateWorkerInvoice } = await import('../utils/pdfGenerator');
+      if (!data.workers || data.workers.length === 0) {
+        alert("لا توجد بيانات لإنشاء الفاتورة");
+        return;
+      }
 
-    await generateWorkerInvoice(
-      {
-        ...data,
-        companyName: settings.company_name,
-        period: `${invoiceMonth}/${invoiceYear}`
-      },
-      settings.company_logo
-    );
+      // Override period text with our Arabic formatted version
+      data.period = periodText;
 
-  } catch (error) {
-    console.error('❌ Error generating worker invoice:', error);
-    alert('حدث خطأ في إنشاء فاتورة العامل');
-  }
-};
+      const { generateCompanyInvoice } = await import('../utils/pdfGenerator');
 
- const generateCompanyInvoicePDF = async () => {
-  try {
-    console.log("📊 Fetching company invoice data...");
-    
-    let url = `${API_URL}/invoice/company?`;
-    let periodText = '';
-    
-    // Build URL based on invoice type
-    if (invoiceType === 'daily') {
-      url += `date=${invoiceDate}&type=daily`;
-      periodText = invoiceDate;
-    } else if (invoiceType === 'weekly') {
-      url += `date=${invoiceDate}&type=weekly`;
-      const weekEnd = new Date(invoiceDate);
-      const weekStart = new Date(weekEnd);
-      weekStart.setDate(weekStart.getDate() - 6);
-      periodText = `${weekStart.toLocaleDateString('en-CA')} إلى ${invoiceDate}`;
-    } else if (invoiceType === 'monthly') {
-      url += `year=${invoiceYear}&month=${invoiceMonth}&type=monthly`;
-      const arabicMonths = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 
-                            'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
-      periodText = `${arabicMonths[invoiceMonth - 1]} ${invoiceYear}`;
-    } else if (invoiceType === 'yearly') {
-      url += `year=${invoiceYear}&type=yearly`;
-      periodText = `${invoiceYear}`;
+      await generateCompanyInvoice(data, data.settings?.company_logo);
+      
+      console.log("✅ PDF generated successfully");
+      setShowCompanyInvoice(false);
+
+    } catch (error) {
+      console.error('❌ Error generating company invoice:', error);
+      alert(`حدث خطأ في إنشاء فاتورة الشركة: ${error.message}`);
     }
-    
-    const res = await fetch(url);
-    
-    if (!res.ok) {
-      throw new Error(`HTTP Error: ${res.status}`);
-    }
-    
-    const data = await res.json();
-    console.log("✅ Received data:", data);
-
-    if (!data.workers || data.workers.length === 0) {
-      alert("لا توجد بيانات لإنشاء الفاتورة");
-      return;
-    }
-
-    // Override period text with our Arabic formatted version
-    data.period = periodText;
-
-    const { generateCompanyInvoice } = await import('../utils/pdfGenerator');
-
-    await generateCompanyInvoice(data, data.settings?.company_logo);
-    
-    console.log("✅ PDF generated successfully");
-    setShowCompanyInvoice(false); // Close modal after success
-
-  } catch (error) {
-    console.error('❌ Error generating company invoice:', error);
-    alert(`حدث خطأ في إنشاء فاتورة الشركة: ${error.message}`);
-  }
-};
+  };
 
   const openWorkerInvoiceModal = (workerId) => {
     setSelectedWorkerForInvoice(workerId);
@@ -765,6 +833,70 @@ const generateWorkerInvoicePDF = async (workerId) => {
         </div>
       )}
 
+      {/* Deduction Modal - NEW */}
+      {showDeductionModal && (
+        <div className="modal-overlay" onClick={() => setShowDeductionModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>إضافة خصم للعامل</h2>
+              <button className="close-btn" onClick={() => setShowDeductionModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>المبلغ (جنيه)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={deductionAmount}
+                  onChange={(e) => setDeductionAmount(e.target.value)}
+                  className="input-field"
+                  placeholder="مثال: 100"
+                />
+              </div>
+              <div className="form-group">
+                <label>سبب الخصم</label>
+                <input
+                  type="text"
+                  value={deductionReason}
+                  onChange={(e) => setDeductionReason(e.target.value)}
+                  className="input-field"
+                  placeholder="سبب الخصم"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>التاريخ</label>
+                <input
+                  type="date"
+                  value={deductionDate}
+                  onChange={(e) => setDeductionDate(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <div className="form-group">
+                <label>ملاحظات (اختياري)</label>
+                <textarea
+                  value={deductionNotes}
+                  onChange={(e) => setDeductionNotes(e.target.value)}
+                  className="input-field"
+                  rows="2"
+                  placeholder="تفاصيل إضافية"
+                />
+              </div>
+              <div className="form-actions">
+                <button onClick={() => setShowDeductionModal(false)} className="cancel-btn">
+                  إلغاء
+                </button>
+                <button onClick={addDeduction} className="submit-btn">
+                  إضافة الخصم
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showWorkerInvoice && (
         <div className="modal-overlay" onClick={() => setShowWorkerInvoice(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -817,118 +949,120 @@ const generateWorkerInvoicePDF = async (workerId) => {
           </div>
         </div>
       )}
+
       {showCompanyInvoice && (
-  <div className="modal-overlay" onClick={() => setShowCompanyInvoice(false)}>
-    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-      <div className="modal-header">
-        <h2>إنشاء فاتورة الشركة</h2>
-        <button className="close-btn" onClick={() => setShowCompanyInvoice(false)}>×</button>
-      </div>
-      <div className="modal-body">
-        <div className="form-group">
-          <label>نوع التقرير</label>
-          <select
-            value={invoiceType}
-            onChange={(e) => setInvoiceType(e.target.value)}
-            className="select-field"
-          >
-            <option value="daily">يومي</option>
-            <option value="weekly">أسبوعي</option>
-            <option value="monthly">شهري</option>
-            <option value="yearly">سنوي</option>
-          </select>
-        </div>
-
-        {invoiceType === 'daily' && (
-          <div className="form-group">
-            <label>التاريخ</label>
-            <input
-              type="date"
-              value={invoiceDate}
-              onChange={(e) => setInvoiceDate(e.target.value)}
-              className="input-field"
-            />
-          </div>
-        )}
-
-        {invoiceType === 'weekly' && (
-          <div className="form-group">
-            <label>نهاية الأسبوع (آخر يوم)</label>
-            <input
-              type="date"
-              value={invoiceDate}
-              onChange={(e) => setInvoiceDate(e.target.value)}
-              className="input-field"
-            />
-            <small className="help-text">
-              سيتم احتساب آخر 7 أيام من التاريخ المحدد
-            </small>
-          </div>
-        )}
-
-        {invoiceType === 'monthly' && (
-          <>
-            <div className="form-group">
-              <label>الشهر</label>
-              <select
-                value={invoiceMonth}
-                onChange={(e) => setInvoiceMonth(parseInt(e.target.value))}
-                className="select-field"
-              >
-                <option value="1">يناير</option>
-                <option value="2">فبراير</option>
-                <option value="3">مارس</option>
-                <option value="4">أبريل</option>
-                <option value="5">مايو</option>
-                <option value="6">يونيو</option>
-                <option value="7">يوليو</option>
-                <option value="8">أغسطس</option>
-                <option value="9">سبتمبر</option>
-                <option value="10">أكتوبر</option>
-                <option value="11">نوفمبر</option>
-                <option value="12">ديسمبر</option>
-              </select>
+        <div className="modal-overlay" onClick={() => setShowCompanyInvoice(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>إنشاء فاتورة الشركة</h2>
+              <button className="close-btn" onClick={() => setShowCompanyInvoice(false)}>×</button>
             </div>
-            <div className="form-group">
-              <label>السنة</label>
-              <input
-                type="number"
-                value={invoiceYear}
-                onChange={(e) => setInvoiceYear(parseInt(e.target.value))}
-                className="input-field"
-                min="2020"
-                max="2050"
-              />
+            <div className="modal-body">
+              <div className="form-group">
+                <label>نوع التقرير</label>
+                <select
+                  value={invoiceType}
+                  onChange={(e) => setInvoiceType(e.target.value)}
+                  className="select-field"
+                >
+                  <option value="daily">يومي</option>
+                  <option value="weekly">أسبوعي</option>
+                  <option value="monthly">شهري</option>
+                  <option value="yearly">سنوي</option>
+                </select>
+              </div>
+
+              {invoiceType === 'daily' && (
+                <div className="form-group">
+                  <label>التاريخ</label>
+                  <input
+                    type="date"
+                    value={invoiceDate}
+                    onChange={(e) => setInvoiceDate(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+              )}
+
+              {invoiceType === 'weekly' && (
+                <div className="form-group">
+                  <label>نهاية الأسبوع (آخر يوم)</label>
+                  <input
+                    type="date"
+                    value={invoiceDate}
+                    onChange={(e) => setInvoiceDate(e.target.value)}
+                    className="input-field"
+                  />
+                  <small className="help-text">
+                    سيتم احتساب آخر 7 أيام من التاريخ المحدد
+                  </small>
+                </div>
+              )}
+
+              {invoiceType === 'monthly' && (
+                <>
+                  <div className="form-group">
+                    <label>الشهر</label>
+                    <select
+                      value={invoiceMonth}
+                      onChange={(e) => setInvoiceMonth(parseInt(e.target.value))}
+                      className="select-field"
+                    >
+                      <option value="1">يناير</option>
+                      <option value="2">فبراير</option>
+                      <option value="3">مارس</option>
+                      <option value="4">أبريل</option>
+                      <option value="5">مايو</option>
+                      <option value="6">يونيو</option>
+                      <option value="7">يوليو</option>
+                      <option value="8">أغسطس</option>
+                      <option value="9">سبتمبر</option>
+                      <option value="10">أكتوبر</option>
+                      <option value="11">نوفمبر</option>
+                      <option value="12">ديسمبر</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>السنة</label>
+                    <input
+                      type="number"
+                      value={invoiceYear}
+                      onChange={(e) => setInvoiceYear(parseInt(e.target.value))}
+                      className="input-field"
+                      min="2020"
+                      max="2050"
+                    />
+                  </div>
+                </>
+              )}
+
+              {invoiceType === 'yearly' && (
+                <div className="form-group">
+                  <label>السنة</label>
+                  <input
+                    type="number"
+                    value={invoiceYear}
+                    onChange={(e) => setInvoiceYear(parseInt(e.target.value))}
+                    className="input-field"
+                    min="2020"
+                    max="2050"
+                  />
+                </div>
+              )}
+
+              <div className="form-actions">
+                <button onClick={() => setShowCompanyInvoice(false)} className="cancel-btn">
+                  إلغاء
+                </button>
+                <button onClick={generateCompanyInvoicePDF} className="submit-btn">
+                  📄 إنشاء الفاتورة
+                </button>
+              </div>
             </div>
-          </>
-        )}
-
-        {invoiceType === 'yearly' && (
-          <div className="form-group">
-            <label>السنة</label>
-            <input
-              type="number"
-              value={invoiceYear}
-              onChange={(e) => setInvoiceYear(parseInt(e.target.value))}
-              className="input-field"
-              min="2020"
-              max="2050"
-            />
           </div>
-        )}
-
-        <div className="form-actions">
-          <button onClick={() => setShowCompanyInvoice(false)} className="cancel-btn">
-            إلغاء
-          </button>
-          <button onClick={generateCompanyInvoicePDF} className="submit-btn">
-            📄 إنشاء الفاتورة
-          </button>
         </div>
-      </div>
-    </div>
-  </div>
-)}
+      )}
+
       <div className="dashboard-header">
         <h1>لوحة التحكم - الأدمن</h1>
         <button onClick={() => navigate('/')} className="logout-btn">
@@ -965,137 +1099,146 @@ const generateWorkerInvoicePDF = async (workerId) => {
 
       <div className="tab-content">
         {activeTab === 'workers' && (
-  <div>
-    <div className="add-worker-section">
-      <h3>إضافة عامل جديد</h3>
-      <button onClick={() => setShowAddWorker(true)} className="add-btn">
-        + إضافة عامل
-      </button>
-    </div>
+          <div>
+            <div className="add-worker-section">
+              <h3>إضافة عامل جديد</h3>
+              <button onClick={() => setShowAddWorker(true)} className="add-btn">
+                + إضافة عامل
+              </button>
+            </div>
 
-    {/* Search Section - ADD THIS */}
-    <div className="search-section">
-      <div className="search-container">
-        <input
-          type="text"
-          placeholder="🔍 بحث عن عامل بالاسم أو رقم الهاتف أو الرقم القومي أو الوظيفة..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="search-input"
-        />
-        {searchTerm && (
-          <button 
-            onClick={() => setSearchTerm('')}
-            className="clear-search-btn"
-            title="مسح البحث"
-          >
-            ✕
-          </button>
-        )}
-      </div>
-      <div className="search-stats">
-        <span className="result-count">
-          العدد: {filteredWorkers.length} من {workers.length}
-        </span>
-        {searchTerm && (
-          <span className="search-term">
-            نتائج البحث عن: "{searchTerm}"
-          </span>
-        )}
-      </div>
-    </div>
+            {/* Search Section */}
+            <div className="search-section">
+              <div className="search-container">
+                <input
+                  type="text"
+                  placeholder="🔍 بحث عن عامل بالاسم أو رقم الهاتف أو الرقم القومي أو الوظيفة..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="search-input"
+                />
+                {searchTerm && (
+                  <button 
+                    onClick={() => setSearchTerm('')}
+                    className="clear-search-btn"
+                    title="مسح البحث"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <div className="search-stats">
+                <span className="result-count">
+                  العدد: {filteredWorkers.length} من {workers.length}
+                </span>
+                {searchTerm && (
+                  <span className="search-term">
+                    نتائج البحث عن: "{searchTerm}"
+                  </span>
+                )}
+              </div>
+            </div>
 
-    <div className="workers-list">
-      <h3>قائمة العمال ({workers.length})</h3>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>الاسم</th>
-            <th>الوظيفة</th>
-            <th>العمر</th>
-            <th>رقم الهاتف</th>
-            <th>تاريخ التعيين</th>
-            <th>سعر الساعة</th>
-            <th>الإجراءات</th>
-            <th>الرواتب</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredWorkers.map(worker => { // CHANGE: workers to filteredWorkers
-            const advances = parseFloat(worker.advances) || 0;
-            return (
-              <tr key={worker.id}>
-                <td>
-                  <button 
-                    onClick={() => navigate(`/worker/${worker.id}`)}
-                    className="worker-name-link"
-                  >
-                    {worker.name}
+            <div className="workers-list">
+              <h3>قائمة العمال ({workers.length})</h3>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>الاسم</th>
+                    <th>الوظيفة</th>
+                    <th>العمر</th>
+                    <th>رقم الهاتف</th>
+                    <th>تاريخ التعيين</th>
+                    <th>سعر الساعة</th>
+                    <th>الإجراءات</th>
+                    <th>الرواتب</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredWorkers.map(worker => {
+                    const advances = parseFloat(worker.advances) || 0;
+                    const deductions = parseFloat(worker.deductions) || 0;
+                    return (
+                      <tr key={worker.id}>
+                        <td>
+                          <button 
+                            onClick={() => navigate(`/worker/${worker.id}`)}
+                            className="worker-name-link"
+                          >
+                            {worker.name}
+                          </button>
+                        </td>
+                        <td>{getJobTitleBadge(worker.job_title)}</td>
+                        <td>{worker.age} سنة</td>
+                        <td>{worker.phone}</td>
+                        <td>{new Date(worker.date_joined).toLocaleDateString('ar-EG')}</td>
+                        <td>
+                          <button
+                            onClick={() => openRateModal(worker.id, worker.hourly_rate)}
+                            className="rate-display-btn"
+                            title="تعديل سعر الساعة"
+                          >
+                            {worker.hourly_rate || 50} ج/س
+                          </button>
+                        </td>
+                      
+                        <td>
+                          <div className="action-buttons">
+                            <button 
+                              onClick={() => openBonusModal(worker.id)}
+                              className="bonus-btn"
+                              title="إضافة ساعات بونص"
+                            >
+                              ⭐ بونص
+                            </button>
+                            <button 
+                              onClick={() => openAdvanceModal(worker.id)}
+                              className="advance-btn"
+                              title="إضافة سلفة"
+                            >
+                              💰 سلفة
+                            </button>
+                            <button 
+                              onClick={() => openDeductionModal(worker.id)}
+                              className="deduction-btn"
+                              title="إضافة خصم"
+                              style={{backgroundColor: '#dc3545', marginLeft: '5px'}}
+                            >
+                              ⚠️ خصم
+                            </button>
+                            <button 
+                              onClick={() => deleteWorker(worker.id, worker.name)}
+                              className="delete-btn"
+                            >
+                              حذف
+                            </button>
+                          </div>
+                        </td>
+                        <td>
+                          <button 
+                            onClick={() => openWorkerInvoiceModal(worker.id)}
+                            className="invoice-btn"
+                            title="إنشاء فاتورة للعامل"
+                          >
+                            📄 فاتورة
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {filteredWorkers.length === 0 && searchTerm && (
+                <div className="no-results">
+                  <p>❌ لا توجد نتائج لـ "{searchTerm}"</p>
+                  <button onClick={() => setSearchTerm('')} className="clear-search-btn">
+                    عرض جميع العمال
                   </button>
-                </td>
-                <td>{getJobTitleBadge(worker.job_title)}</td>
-                <td>{worker.age} سنة</td>
-                <td>{worker.phone}</td>
-                <td>{new Date(worker.date_joined).toLocaleDateString('ar-EG')}</td>
-                <td>
-                  <button
-                    onClick={() => openRateModal(worker.id, worker.hourly_rate)}
-                    className="rate-display-btn"
-                    title="تعديل سعر الساعة"
-                  >
-                    {worker.hourly_rate || 50} ج/س
-                  </button>
-                </td>
-              
-                <td>
-                  <div className="action-buttons">
-                    <button 
-                      onClick={() => openBonusModal(worker.id)}
-                      className="bonus-btn"
-                      title="إضافة ساعات بونص"
-                    >
-                      ⭐ بونص
-                    </button>
-                    <button 
-                      onClick={() => openAdvanceModal(worker.id)}
-                      className="advance-btn"
-                      title="إضافة سلفة"
-                    >
-                      💰 سلفة
-                    </button>
-                    <button 
-                      onClick={() => deleteWorker(worker.id, worker.name)}
-                      className="delete-btn"
-                    >
-                      حذف
-                    </button>
-                  </div>
-                </td>
-                <td>
-                  <button 
-                    onClick={() => openWorkerInvoiceModal(worker.id)}
-                    className="invoice-btn"
-                    title="إنشاء فاتورة للعامل"
-                  >
-                    📄 فاتورة
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {filteredWorkers.length === 0 && searchTerm && (
-        <div className="no-results">
-          <p>❌ لا توجد نتائج لـ "{searchTerm}"</p>
-          <button onClick={() => setSearchTerm('')} className="clear-search-btn">
-            عرض جميع العمال
-          </button>
-        </div>
-      )}
-    </div>
-  </div>
-)}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {activeTab === 'reports' && (
           <div>
@@ -1171,13 +1314,13 @@ const generateWorkerInvoicePDF = async (workerId) => {
                 📥 تحميل CSV
               </button>
 
-<button 
-  onClick={() => setShowCompanyInvoice(true)} 
-  className="company-invoice-btn" 
-  disabled={isLoadingReport}
->
-  🏢 فاتورة الشركة (PDF)
-</button>
+              <button 
+                onClick={() => setShowCompanyInvoice(true)} 
+                className="company-invoice-btn" 
+                disabled={isLoadingReport}
+              >
+                🏢 فاتورة الشركة (PDF)
+              </button>
             </div>
 
             <div className="report-data">
@@ -1212,6 +1355,7 @@ const generateWorkerInvoicePDF = async (workerId) => {
                       <th>سعر الساعة</th>
                       <th>المستحق</th>
                       <th>السلف</th>
+                      <th>الخصومات</th>
                       <th>الصافي</th>
                     </tr>
                   </thead>
@@ -1221,7 +1365,8 @@ const generateWorkerInvoicePDF = async (workerId) => {
                       const hours = parseFloat(row.total_hours) || 0;
                       const earned = hours * rate;
                       const advances = parseFloat(row.advances) || 0;
-                      const net = earned - advances;
+                      const deductions = parseFloat(row.deductions) || 0;
+                      const net = earned - advances - deductions;
                       
                       return (
                         <tr key={i}>
@@ -1243,6 +1388,7 @@ const generateWorkerInvoicePDF = async (workerId) => {
                           <td>{rate} ج</td>
                           <td className="amount">{earned.toFixed(2)} جنيه</td>
                           <td className="advances" style={{color: '#dc3545'}}>{advances.toFixed(2)} جنيه</td>
+                          <td className="deductions" style={{color: '#ff6b35'}}>{deductions.toFixed(2)} جنيه</td>
                           <td className="net-amount" style={{color: '#28a745', fontWeight: 'bold'}}>
                             {net.toFixed(2)} جنيه
                           </td>
@@ -1259,6 +1405,9 @@ const generateWorkerInvoicePDF = async (workerId) => {
                       <td className="amount"><strong>{totals.totalAmount} جنيه</strong></td>
                       <td style={{color: '#dc3545', fontWeight: 'bold'}}>
                         <strong>{totals.totalAdvances} جنيه</strong>
+                      </td>
+                      <td style={{color: '#ff6b35', fontWeight: 'bold'}}>
+                        <strong>{totals.totalDeductions} جنيه</strong>
                       </td>
                       <td style={{color: '#28a745', fontWeight: 'bold'}}>
                         <strong>{totals.totalNet} جنيه</strong>
