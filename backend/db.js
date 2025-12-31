@@ -89,6 +89,21 @@ function initializeDatabase() {
     `);
     console.log('Advances table ready');
 
+    // Deductions table (خصم) - NEW
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS deductions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        worker_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        reason TEXT NOT NULL,
+        date DATE NOT NULL,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (worker_id) REFERENCES workers(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Deductions table ready');
+
     // Drivers table (keeping for backward compatibility)
     db.exec(`
       CREATE TABLE IF NOT EXISTS drivers (

@@ -284,10 +284,12 @@ app.get('/api/reports/daily/:date', (req, res) => {
         a.check_in, 
         a.check_out, 
         a.total_hours,
-        COALESCE(SUM(adv.amount), 0) as advances
+        COALESCE(SUM(adv.amount), 0) as advances,
+        COALESCE(SUM(ded.amount), 0) as deductions
       FROM attendance a
       JOIN workers w ON a.worker_id = w.id
       LEFT JOIN advances adv ON w.id = adv.worker_id AND adv.date = a.date
+      LEFT JOIN deductions ded ON w.id = ded.worker_id AND ded.date = a.date
       WHERE a.date = ?
       GROUP BY w.id, w.name, w.hourly_rate, w.job_title, a.check_in, a.check_out, a.total_hours
       ORDER BY w.name
@@ -319,7 +321,8 @@ app.get('/api/reports/weekly', (req, res) => {
           WHEN a.check_in IS NOT NULL THEN a.date 
         END) as days_present,
         COALESCE(SUM(a.total_hours), 0) as total_hours,
-        COALESCE(SUM(adv.amount), 0) as advances
+        COALESCE(SUM(adv.amount), 0) as advances,
+        COALESCE(SUM(ded.amount), 0) as deductions
       FROM workers w
       LEFT JOIN attendance a ON w.id = a.worker_id
         AND a.date >= ?
@@ -327,11 +330,14 @@ app.get('/api/reports/weekly', (req, res) => {
       LEFT JOIN advances adv ON w.id = adv.worker_id 
         AND adv.date >= ?
         AND adv.date <= ?
+      LEFT JOIN deductions ded ON w.id = ded.worker_id 
+        AND ded.date >= ?
+        AND ded.date <= ?
       GROUP BY w.id, w.name, w.hourly_rate, w.job_title
       ORDER BY w.name
     `;
     
-    const rows = db.prepare(query).all(startDateStr, endDateStr, startDateStr, endDateStr);
+    const rows = db.prepare(query).all(startDateStr, endDateStr, startDateStr, endDateStr, startDateStr, endDateStr);
     
     res.json(rows);
   } catch (err) {
@@ -378,7 +384,8 @@ app.get('/api/reports/monthly', (req, res) => {
           WHEN a.check_in IS NOT NULL THEN a.date 
         END) as days_present,
         COALESCE(SUM(a.total_hours), 0) as total_hours,
-        COALESCE(SUM(adv.amount), 0) as advances
+        COALESCE(SUM(adv.amount), 0) as advances,
+        COALESCE(SUM(ded.amount), 0) as deductions
       FROM workers w
       LEFT JOIN attendance a ON w.id = a.worker_id
         AND a.date >= ?
@@ -386,11 +393,14 @@ app.get('/api/reports/monthly', (req, res) => {
       LEFT JOIN advances adv ON w.id = adv.worker_id 
         AND adv.date >= ?
         AND adv.date <= ?
+      LEFT JOIN deductions ded ON w.id = ded.worker_id 
+        AND ded.date >= ?
+        AND ded.date <= ?
       GROUP BY w.id, w.name, w.date_joined, w.hourly_rate, w.job_title
       ORDER BY w.name
     `;
     
-    const rows = db.prepare(query).all(startDate, endDate, startDate, endDate);
+    const rows = db.prepare(query).all(startDate, endDate, startDate, endDate, startDate, endDate);
     
     const result = rows.map(row => {
       const workerWorkDays = getWorkDaysInMonth(targetYear, targetMonth, row.date_joined);
@@ -403,7 +413,8 @@ app.get('/api/reports/monthly', (req, res) => {
         days_present: row.days_present || 0,
         days_absent: Math.max(0, workerWorkDays - (row.days_present || 0)),
         total_hours: row.total_hours || 0,
-        advances: row.advances || 0
+        advances: row.advances || 0,
+        deductions: row.deductions || 0
       };
     });
     
@@ -446,6 +457,53 @@ app.get('/api/advances/total/:workerId', (req, res) => {
     `;
     const result = db.prepare(query).get(req.params.workerId, startDate, endDate);
     res.json({ total: result.total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============= APIs الخصومات (Deductions) =============
+
+app.get('/api/deductions/:workerId', (req, res) => {
+  try {
+    const deductions = db.prepare('SELECT * FROM deductions WHERE worker_id = ? ORDER BY date DESC').all(req.params.workerId);
+    res.json(deductions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/deductions', (req, res) => {
+  try {
+    const { worker_id, amount, reason, date, notes } = req.body;
+    const stmt = db.prepare('INSERT INTO deductions (worker_id, amount, reason, date, notes) VALUES (?, ?, ?, ?, ?)');
+    const result = stmt.run(worker_id, amount, reason, date, notes || null);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/deductions/total/:workerId', (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const query = `
+      SELECT COALESCE(SUM(amount), 0) as total
+      FROM deductions
+      WHERE worker_id = ? AND date >= ? AND date <= ?
+    `;
+    const result = db.prepare(query).get(req.params.workerId, startDate, endDate);
+    res.json({ total: result.total });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/deductions/:id', (req, res) => {
+  try {
+    const stmt = db.prepare('DELETE FROM deductions WHERE id = ?');
+    const result = stmt.run(req.params.id);
+    res.json({ success: true, deleted: result.changes });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -517,6 +575,17 @@ app.put('/api/trips/:id/time', (req, res) => {
   }
 });
 
+// Delete trip API
+app.delete('/api/trips/:id', (req, res) => {
+  try {
+    const stmt = db.prepare('DELETE FROM trips WHERE id = ?');
+    const result = stmt.run(req.params.id);
+    res.json({ success: true, deleted: result.changes });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ============= APIs الإعدادات =============
 
 app.get('/api/settings', (req, res) => {
@@ -583,6 +652,13 @@ app.get('/api/workers/:id/full-report', (req, res) => {
       ORDER BY date
     `).all(id, startDate, endDate);
 
+    // Get deductions
+    const deductions = db.prepare(`
+      SELECT * FROM deductions 
+      WHERE worker_id = ? AND date >= ? AND date <= ?
+      ORDER BY date
+    `).all(id, startDate, endDate);
+
     // Calculate totals
     const totalHours = attendance.reduce((sum, row) => {
       const hours = parseFloat(row.total_hours);
@@ -594,7 +670,11 @@ app.get('/api/workers/:id/full-report', (req, res) => {
       const amount = parseFloat(row.amount);
       return sum + (isNaN(amount) ? 0 : amount);
     }, 0);
-    const netAmount = totalEarned - totalAdvances;
+    const totalDeductions = deductions.reduce((sum, row) => {
+      const amount = parseFloat(row.amount);
+      return sum + (isNaN(amount) ? 0 : amount);
+    }, 0);
+    const netAmount = totalEarned - totalAdvances - totalDeductions;
 
     // Get work days (excluding Fridays)
     const getWorkDaysInMonth = (year, month, joinDate) => {
@@ -623,10 +703,12 @@ app.get('/api/workers/:id/full-report', (req, res) => {
       period: { year, month },
       attendance,
       advances,
+      deductions,
       summary: {
         totalHours: totalHours.toFixed(2),
         totalEarned: totalEarned.toFixed(2),
         totalAdvances: totalAdvances.toFixed(2),
+        totalDeductions: totalDeductions.toFixed(2),
         netAmount: netAmount.toFixed(2),
         daysPresent,
         daysAbsent,
@@ -697,6 +779,7 @@ app.get('/api/invoice/company', (req, res) => {
     let totalHours = 0;
     let totalEarned = 0;
     let totalAdvances = 0;
+    let totalDeductions = 0;
     let workersWithActivity = 0;
     
     for (const worker of workers) {
@@ -709,6 +792,12 @@ app.get('/api/invoice/company', (req, res) => {
       // Get advances for this worker in the period
       const advances = db.prepare(`
         SELECT * FROM advances 
+        WHERE worker_id = ? AND date >= ? AND date <= ?
+      `).all(worker.id, startDate, endDate);
+
+      // Get deductions for this worker in the period
+      const deductions = db.prepare(`
+        SELECT * FROM deductions 
         WHERE worker_id = ? AND date >= ? AND date <= ?
       `).all(worker.id, startDate, endDate);
 
@@ -725,15 +814,21 @@ app.get('/api/invoice/company', (req, res) => {
         return sum + (isNaN(a) ? 0 : a);
       }, 0);
       
-      const netAmount = earned - advancesTotal;
+      const deductionsTotal = deductions.reduce((sum, row) => {
+        const d = parseFloat(row.amount);
+        return sum + (isNaN(d) ? 0 : d);
+      }, 0);
+      
+      const netAmount = earned - advancesTotal - deductionsTotal;
 
       // Add to company totals
       totalHours += hours;
       totalEarned += earned;
       totalAdvances += advancesTotal;
+      totalDeductions += deductionsTotal;
 
       // Only include workers with activity in the period
-      if (hours > 0 || advancesTotal > 0) {
+      if (hours > 0 || advancesTotal > 0 || deductionsTotal > 0) {
         workersWithActivity++;
         result.push({
           id: worker.id,
@@ -743,14 +838,16 @@ app.get('/api/invoice/company', (req, res) => {
           total_hours: hours.toFixed(2),
           earned: earned.toFixed(2),
           advances: advancesTotal.toFixed(2),
+          deductions: deductionsTotal.toFixed(2),
           net_amount: netAmount.toFixed(2),
           attendance_count: attendance.length,
-          advances_count: advances.length
+          advances_count: advances.length,
+          deductions_count: deductions.length
         });
       }
     }
 
-    const totalNet = totalEarned - totalAdvances;
+    const totalNet = totalEarned - totalAdvances - totalDeductions;
 
     // Format period text in Arabic
     let periodText = '';
@@ -784,6 +881,7 @@ app.get('/api/invoice/company', (req, res) => {
       totalHours: totalHours.toFixed(2),
       totalEarned: totalEarned.toFixed(2),
       totalAdvances: totalAdvances.toFixed(2),
+      totalDeductions: totalDeductions.toFixed(2),
       totalNet: totalNet.toFixed(2),
       workersCount: workers.length,
       activeWorkersCount: workersWithActivity,
@@ -836,6 +934,9 @@ app.post('/api/cleanup/old-data', (req, res) => {
     // Delete old advances records
     const advancesResult = db.prepare('DELETE FROM advances WHERE date < ?').run(cutoffStr);
     
+    // Delete old deductions records
+    const deductionsResult = db.prepare('DELETE FROM deductions WHERE date < ?').run(cutoffStr);
+    
     // Delete old trips records
     const tripsResult = db.prepare('DELETE FROM trips WHERE date < ?').run(cutoffStr);
     
@@ -844,6 +945,7 @@ app.post('/api/cleanup/old-data', (req, res) => {
       deleted: {
         attendance: attendanceResult.changes,
         advances: advancesResult.changes,
+        deductions: deductionsResult.changes,
         trips: tripsResult.changes
       },
       message: `تم حذف البيانات القديمة قبل ${cutoffStr}`
@@ -864,6 +966,7 @@ app.get('/api/export/data', (req, res) => {
       data.workers = db.prepare('SELECT * FROM workers').all();
       data.attendance = db.prepare('SELECT * FROM attendance').all();
       data.advances = db.prepare('SELECT * FROM advances').all();
+      data.deductions = db.prepare('SELECT * FROM deductions').all();
       data.drivers = db.prepare('SELECT * FROM drivers').all();
       data.trips = db.prepare('SELECT * FROM trips').all();
       data.settings = db.prepare('SELECT * FROM settings').all();
@@ -873,6 +976,8 @@ app.get('/api/export/data', (req, res) => {
       data = db.prepare('SELECT * FROM attendance').all();
     } else if (type === 'advances') {
       data = db.prepare('SELECT * FROM advances').all();
+    } else if (type === 'deductions') {
+      data = db.prepare('SELECT * FROM deductions').all();
     }
     
     res.json(data);
