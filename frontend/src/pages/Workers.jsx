@@ -2,11 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Workers.css';
 import API_URL from '../config';
+
 function Workers() {
   const navigate = useNavigate();
   const [workers, setWorkers] = useState([]);
+  const [filteredWorkers, setFilteredWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     loadWorkersAttendance();
@@ -14,11 +17,24 @@ function Workers() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    // Filter workers based on search term
+    if (searchTerm.trim() === '') {
+      setFilteredWorkers(workers);
+    } else {
+      const filtered = workers.filter(worker =>
+        worker.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredWorkers(filtered);
+    }
+  }, [searchTerm, workers]);
+
   const loadWorkersAttendance = async () => {
     try {
       const res = await fetch(`${API_URL}/attendance/today`);
       const data = await res.json();
       setWorkers(data);
+      setFilteredWorkers(data);
       setLoading(false);
     } catch (error) {
       console.error('Error loading workers:', error);
@@ -100,6 +116,36 @@ function Workers() {
       </div>
 
       <div className="workers-table-container">
+        {/* Search Bar */}
+        <div className="search-container">
+          <div className="search-box">
+            <input
+              type="text"
+              placeholder="🔍 بحث عن عامل بالاسم..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input"
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')}
+                className="clear-search"
+                title="مسح البحث"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <div className="search-info">
+            <span className="worker-count">
+              العدد: {filteredWorkers.length} من {workers.length}
+            </span>
+            {searchTerm && filteredWorkers.length === 0 && (
+              <span className="no-results">لا توجد نتائج لـ "{searchTerm}"</span>
+            )}
+          </div>
+        </div>
+
         <div className="info-box">
           <div 
             className="info-header" 
@@ -133,7 +179,7 @@ function Workers() {
             </tr>
           </thead>
           <tbody>
-            {workers.map((worker) => (
+            {filteredWorkers.map((worker) => (
               <tr key={worker.id}>
                 <td className="worker-name">
                   <button 
@@ -212,11 +258,11 @@ function Workers() {
         </button>
         
         <button 
-  onClick={() => navigate('/drivers')} 
-  className="drivers-link"
->
-  🚗 إدارة السواقين والرحلات
-</button>
+          onClick={() => navigate('/drivers')} 
+          className="drivers-link"
+        >
+          🚗 إدارة السواقين والرحلات
+        </button>
         
         <button 
           onClick={() => navigate('/dashboard')} 

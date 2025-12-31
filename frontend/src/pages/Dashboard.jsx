@@ -51,6 +51,9 @@ function Dashboard() {
   const [advanceAmount, setAdvanceAmount] = useState('');
   const [advanceDate, setAdvanceDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [advanceNotes, setAdvanceNotes] = useState('');
+const [searchTerm, setSearchTerm] = useState('');
+const [filteredWorkers, setFilteredWorkers] = useState([]);
+
   useEffect(() => {
     loadWorkers();
     loadSettings();
@@ -59,37 +62,51 @@ function Dashboard() {
     }
   }, [activeTab]);
 
+  useEffect(() => {
+  if (searchTerm.trim() === '') {
+    setFilteredWorkers(workers);
+  } else {
+    const filtered = workers.filter(worker =>
+      worker.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      worker.phone.includes(searchTerm) ||
+      worker.national_id.includes(searchTerm) ||
+      (worker.job_title && worker.job_title.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+    setFilteredWorkers(filtered);
+  }
+}, [searchTerm, workers]);
+
   const loadWorkers = async () => {
-    try {
-      const res = await fetch(`${API_URL}/workers`);
-      const data = await res.json();
-      
-      // Fetch advances for each worker (current month)
-      const workersWithAdvances = await Promise.all(
-        data.map(async (worker) => {
-          try {
-            const today = new Date();
-            const startDate = new Date(today.getFullYear(), today.getMonth(), 1).toLocaleDateString('en-CA');
-            const endDate = today.toLocaleDateString('en-CA');
-            
-            const advancesRes = await fetch(`${API_URL}/advances/total/${worker.id}?startDate=${startDate}&endDate=${endDate}`);
-            const advancesData = await advancesRes.json();
-            
-            return {
-              ...worker,
-              advances: advancesData.total || 0
-            };
-          } catch (error) {
-            return { ...worker, advances: 0 };
-          }
-        })
-      );
-      
-      setWorkers(workersWithAdvances);
-    } catch (error) {
-      console.error('Error loading workers:', error);
-    }
-  };
+  try {
+    const res = await fetch(`${API_URL}/workers`);
+    const data = await res.json();
+    
+    const workersWithAdvances = await Promise.all(
+      data.map(async (worker) => {
+        try {
+          const today = new Date();
+          const startDate = new Date(today.getFullYear(), today.getMonth(), 1).toLocaleDateString('en-CA');
+          const endDate = today.toLocaleDateString('en-CA');
+          
+          const advancesRes = await fetch(`${API_URL}/advances/total/${worker.id}?startDate=${startDate}&endDate=${endDate}`);
+          const advancesData = await advancesRes.json();
+          
+          return {
+            ...worker,
+            advances: advancesData.total || 0
+          };
+        } catch (error) {
+          return { ...worker, advances: 0 };
+        }
+      })
+    );
+    
+    setWorkers(workersWithAdvances);
+    setFilteredWorkers(workersWithAdvances); 
+  } catch (error) {
+    console.error('Error loading workers:', error);
+  }
+};
 
   const calculateTotals = () => {
     if (reportData.length === 0) return { totalHours: 0, totalAmount: 0, totalAdvances: 0, totalNet: 0 };
@@ -948,97 +965,137 @@ const generateWorkerInvoicePDF = async (workerId) => {
 
       <div className="tab-content">
         {activeTab === 'workers' && (
-          <div>
-            <div className="add-worker-section">
-              <h3>إضافة عامل جديد</h3>
-              <button onClick={() => setShowAddWorker(true)} className="add-btn">
-                + إضافة عامل
-              </button>
-            </div>
+  <div>
+    <div className="add-worker-section">
+      <h3>إضافة عامل جديد</h3>
+      <button onClick={() => setShowAddWorker(true)} className="add-btn">
+        + إضافة عامل
+      </button>
+    </div>
 
-            <div className="workers-list">
-              <h3>قائمة العمال ({workers.length})</h3>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>الاسم</th>
-                    <th>الوظيفة</th>
-                    <th>العمر</th>
-                    <th>رقم الهاتف</th>
-                    <th>تاريخ التعيين</th>
-                    <th>سعر الساعة</th>
-                    <th>الإجراءات</th>
-                    <th>الرواتب</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workers.map(worker => {
-                    const advances = parseFloat(worker.advances) || 0;
-                    return (
-                      <tr key={worker.id}>
-                        <td>
-                          <button 
-                            onClick={() => navigate(`/worker/${worker.id}`)}
-                            className="worker-name-link"
-                          >
-                            {worker.name}
-                          </button>
-                        </td>
-                        <td>{getJobTitleBadge(worker.job_title)}</td>
-                        <td>{worker.age} سنة</td>
-                        <td>{worker.phone}</td>
-                        <td>{new Date(worker.date_joined).toLocaleDateString('ar-EG')}</td>
-                        <td>
-                          <button
-                            onClick={() => openRateModal(worker.id, worker.hourly_rate)}
-                            className="rate-display-btn"
-                            title="تعديل سعر الساعة"
-                          >
-                            {worker.hourly_rate || 50} ج/س
-                          </button>
-                        </td>
-                      
-                        <td>
-                          <div className="action-buttons">
-                            <button 
-                              onClick={() => openBonusModal(worker.id)}
-                              className="bonus-btn"
-                              title="إضافة ساعات بونص"
-                            >
-                              ⭐ بونص
-                            </button>
-                            <button 
-                              onClick={() => openAdvanceModal(worker.id)}
-                              className="advance-btn"
-                              title="إضافة سلفة"
-                            >
-                              💰 سلفة
-                            </button>
-                            <button 
-                              onClick={() => deleteWorker(worker.id, worker.name)}
-                              className="delete-btn"
-                            >
-                              حذف
-                            </button>
-                          </div>
-                        </td>
-                        <td>
-                          <button 
-                            onClick={() => openWorkerInvoiceModal(worker.id)}
-                            className="invoice-btn"
-                            title="إنشاء فاتورة للعامل"
-                          >
-                            📄 فاتورة
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+    {/* Search Section - ADD THIS */}
+    <div className="search-section">
+      <div className="search-container">
+        <input
+          type="text"
+          placeholder="🔍 بحث عن عامل بالاسم أو رقم الهاتف أو الرقم القومي أو الوظيفة..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="search-input"
+        />
+        {searchTerm && (
+          <button 
+            onClick={() => setSearchTerm('')}
+            className="clear-search-btn"
+            title="مسح البحث"
+          >
+            ✕
+          </button>
         )}
+      </div>
+      <div className="search-stats">
+        <span className="result-count">
+          العدد: {filteredWorkers.length} من {workers.length}
+        </span>
+        {searchTerm && (
+          <span className="search-term">
+            نتائج البحث عن: "{searchTerm}"
+          </span>
+        )}
+      </div>
+    </div>
+
+    <div className="workers-list">
+      <h3>قائمة العمال ({workers.length})</h3>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>الاسم</th>
+            <th>الوظيفة</th>
+            <th>العمر</th>
+            <th>رقم الهاتف</th>
+            <th>تاريخ التعيين</th>
+            <th>سعر الساعة</th>
+            <th>الإجراءات</th>
+            <th>الرواتب</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredWorkers.map(worker => { // CHANGE: workers to filteredWorkers
+            const advances = parseFloat(worker.advances) || 0;
+            return (
+              <tr key={worker.id}>
+                <td>
+                  <button 
+                    onClick={() => navigate(`/worker/${worker.id}`)}
+                    className="worker-name-link"
+                  >
+                    {worker.name}
+                  </button>
+                </td>
+                <td>{getJobTitleBadge(worker.job_title)}</td>
+                <td>{worker.age} سنة</td>
+                <td>{worker.phone}</td>
+                <td>{new Date(worker.date_joined).toLocaleDateString('ar-EG')}</td>
+                <td>
+                  <button
+                    onClick={() => openRateModal(worker.id, worker.hourly_rate)}
+                    className="rate-display-btn"
+                    title="تعديل سعر الساعة"
+                  >
+                    {worker.hourly_rate || 50} ج/س
+                  </button>
+                </td>
+              
+                <td>
+                  <div className="action-buttons">
+                    <button 
+                      onClick={() => openBonusModal(worker.id)}
+                      className="bonus-btn"
+                      title="إضافة ساعات بونص"
+                    >
+                      ⭐ بونص
+                    </button>
+                    <button 
+                      onClick={() => openAdvanceModal(worker.id)}
+                      className="advance-btn"
+                      title="إضافة سلفة"
+                    >
+                      💰 سلفة
+                    </button>
+                    <button 
+                      onClick={() => deleteWorker(worker.id, worker.name)}
+                      className="delete-btn"
+                    >
+                      حذف
+                    </button>
+                  </div>
+                </td>
+                <td>
+                  <button 
+                    onClick={() => openWorkerInvoiceModal(worker.id)}
+                    className="invoice-btn"
+                    title="إنشاء فاتورة للعامل"
+                  >
+                    📄 فاتورة
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {filteredWorkers.length === 0 && searchTerm && (
+        <div className="no-results">
+          <p>❌ لا توجد نتائج لـ "{searchTerm}"</p>
+          <button onClick={() => setSearchTerm('')} className="clear-search-btn">
+            عرض جميع العمال
+          </button>
+        </div>
+      )}
+    </div>
+  </div>
+)}
 
         {activeTab === 'reports' && (
           <div>
