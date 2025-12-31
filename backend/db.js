@@ -89,7 +89,7 @@ function initializeDatabase() {
     `);
     console.log('Advances table ready');
 
-    // Drivers table
+    // Drivers table (keeping for backward compatibility)
     db.exec(`
       CREATE TABLE IF NOT EXISTS drivers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,9 +99,9 @@ function initializeDatabase() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    console.log('Drivers table ready');
+    console.log('Drivers table ready (for backward compatibility)');
 
-    // Trips table
+    // Trips table (UPDATED: now references workers table instead of drivers table)
     db.exec(`
       CREATE TABLE IF NOT EXISTS trips (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,10 +113,10 @@ function initializeDatabase() {
         end_time TIME,
         notes TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (driver_id) REFERENCES drivers(id) ON DELETE CASCADE
+        FOREIGN KEY (driver_id) REFERENCES workers(id) ON DELETE CASCADE
       )
     `);
-    console.log('Trips table ready');
+    console.log('Trips table ready (updated to reference workers table)');
 
     // Settings table
     db.exec(`
@@ -136,6 +136,78 @@ function initializeDatabase() {
     `);
     insertSettings.run();
     console.log('Default settings inserted');
+
+    // Migrate existing trips to new structure if needed
+    try {
+      // Check if trips table has old foreign key structure
+      const tripTableInfo = db.prepare("PRAGMA foreign_key_list(trips)").all();
+      const hasOldForeignKey = tripTableInfo.some(fk => fk.table === 'drivers');
+      
+      if (hasOldForeignKey) {
+        console.log('Migrating trips table structure...');
+        
+        // Create temporary table with new structure
+        db.exec(`
+          CREATE TABLE trips_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            driver_id INTEGER NOT NULL,
+            from_location TEXT NOT NULL,
+            to_location TEXT NOT NULL,
+            date DATE NOT NULL,
+            start_time TIME,
+            end_time TIME,
+            notes TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (driver_id) REFERENCES workers(id) ON DELETE CASCADE
+          )
+        `);
+        
+        // Copy existing data
+        const oldTrips = db.prepare('SELECT * FROM trips').all();
+        const insertTrip = db.prepare(`
+          INSERT INTO trips_new (driver_id, from_location, to_location, date, start_time, end_time, notes, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        
+        for (const trip of oldTrips) {
+          // Try to find corresponding worker for this driver
+          const driver = db.prepare('SELECT * FROM drivers WHERE id = ?').get(trip.driver_id);
+          if (driver) {
+            // Find or create worker record for this driver
+            let worker = db.prepare("SELECT * FROM workers WHERE name = ? AND phone = ?").get(driver.name, driver.phone);
+            
+            if (!worker) {
+              // Create worker record for this driver
+              const insertWorker = db.prepare(`
+                INSERT INTO workers (name, phone, age, national_id, date_joined, job_title) 
+                VALUES (?, ?, 30, '00000000000000', DATE('now'), 'سواق')
+              `);
+              const result = insertWorker.run(driver.name, driver.phone);
+              worker = { id: result.lastInsertRowid };
+            }
+            
+            // Insert trip with new driver_id (worker_id)
+            insertTrip.run(
+              worker.id,
+              trip.from_location,
+              trip.to_location,
+              trip.date,
+              trip.start_time,
+              trip.end_time,
+              trip.notes,
+              trip.created_at
+            );
+          }
+        }
+        
+        // Drop old table and rename new one
+        db.exec('DROP TABLE trips');
+        db.exec('ALTER TABLE trips_new RENAME TO trips');
+        console.log('Successfully migrated trips table to new structure');
+      }
+    } catch (migrationError) {
+      console.log('Migration not needed or already completed:', migrationError.message);
+    }
 
     // Add sample data only in dev mode
     const workerCount = db.prepare('SELECT COUNT(*) as count FROM workers').get();
@@ -159,7 +231,7 @@ function initializeDatabase() {
       console.log('Sample workers inserted');
     }
 
-    // Add sample drivers only in dev mode
+    // Add sample drivers only in dev mode (for backward compatibility)
     const driverCount = db.prepare('SELECT COUNT(*) as count FROM drivers').get();
     if (driverCount.count === 0 && !process.env.USER_DATA_PATH) {
       const insertDriver = db.prepare(`
@@ -178,26 +250,34 @@ function initializeDatabase() {
         ['علي محمود', '01022223333', 'DL789012'],
         ['حسن أحمد', '01033334444', 'DL345678']
       ]);
-      console.log('Sample drivers inserted');
+      console.log('Sample drivers inserted (for backward compatibility)');
     }
 
-    // Add sample trips for first driver
+    // Add sample trips for first worker who is a driver
     const tripCount = db.prepare('SELECT COUNT(*) as count FROM trips').get();
     if (tripCount.count === 0 && !process.env.USER_DATA_PATH) {
-      // Get first driver ID
-      const firstDriver = db.prepare('SELECT id FROM drivers LIMIT 1').get();
-      if (firstDriver) {
+      // Get first worker who is a driver (job_title = 'سواق')
+      const firstDriverWorker = db.prepare("SELECT id FROM workers WHERE job_title = 'سواق' LIMIT 1").get();
+      if (firstDriverWorker) {
         const insertTrip = db.prepare(`
           INSERT INTO trips (driver_id, from_location, to_location, date, notes) 
           VALUES (?, ?, ?, ?, ?)
         `);
 
         const today = new Date().toLocaleDateString('en-CA');
-        insertTrip.run(firstDriver.id, 'مكان العمل', 'الميناء', today, 'شحن بضائع');
-        insertTrip.run(firstDriver.id, 'مكان العمل', 'المصنع', today, 'نقل مواد');
+        insertTrip.run(firstDriverWorker.id, 'مكان العمل', 'الميناء', today, 'شحن بضائع');
+        insertTrip.run(firstDriverWorker.id, 'مكان العمل', 'المصنع', today, 'نقل مواد');
         
         console.log('Sample trips inserted');
       }
+    }
+
+    // Create an index on job_title for faster driver queries
+    try {
+      db.exec('CREATE INDEX IF NOT EXISTS idx_workers_job_title ON workers(job_title)');
+      console.log('Index on job_title created');
+    } catch (indexError) {
+      console.log('Index already exists or error:', indexError.message);
     }
 
   } catch (error) {

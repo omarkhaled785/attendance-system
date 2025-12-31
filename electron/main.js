@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -7,6 +7,22 @@ let mainWindow;
 let serverProcess;
 
 const isDev = !app.isPackaged;
+
+// Disable hardware acceleration for better compatibility
+// This must be called BEFORE app.ready
+app.disableHardwareAcceleration();
+
+// Add Windows-specific command line switches
+if (process.platform === 'win32') {
+  app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
+  app.commandLine.appendSwitch('disable-site-isolation-trials');
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows', 'true');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+  app.commandLine.appendSwitch('disable-background-timer-throttling');
+  app.commandLine.appendSwitch('disable-ipc-flooding-protection');
+  app.commandLine.appendSwitch('enable-experimental-web-platform-features');
+  app.commandLine.appendSwitch('in-process-gpu');
+}
 
 function ensureUserDataPath() {
   const userDataPath = app.getPath('userData');
@@ -33,40 +49,83 @@ function createWindow() {
       devTools: isDev,
       backgroundThrottling: false,
       offscreen: false,
-      disableHardwareAcceleration: false
+      webSecurity: !isDev,
+      spellcheck: false,
+      enablePreferredSizeMode: true
     },
     show: false,
-    backgroundColor: '#ffffff'
+    backgroundColor: '#ffffff',
+    frame: true,
+    thickFrame: true,
+    hasShadow: true,
+    titleBarStyle: 'default',
+    transparent: false,
+    vibrancy: 'none'
   });
 
   mainWindow.setMenuBarVisibility(false);
+  
+  // Set app user model ID for Windows taskbar
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.attendance.system');
+  }
 
+  // Handle window state
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    mainWindow.focus();
+    if (process.platform === 'win32') {
+      mainWindow.focus();
+      mainWindow.focusOnWebView();
+    }
   });
 
+  // Prevent dev tools in production
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (!isDev && (input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i') {
       event.preventDefault();
     }
   });
 
+  // Disable context menu in production
   mainWindow.webContents.on('context-menu', (e) => {
     if (!isDev) e.preventDefault();
   });
 
+  // Fix focus issues on Windows
   mainWindow.on('focus', () => {
     if (process.platform === 'win32') {
-      mainWindow.webContents.focus();
+      setTimeout(() => {
+        mainWindow.webContents.focus();
+      }, 100);
     }
   });
 
   mainWindow.on('restore', () => {
-    setTimeout(() => {
-      mainWindow.focus();
-      mainWindow.webContents.focus();
-    }, 100);
+    if (process.platform === 'win32') {
+      setTimeout(() => {
+        mainWindow.focus();
+        mainWindow.webContents.focus();
+      }, 200);
+    }
+  });
+
+  mainWindow.on('show', () => {
+    if (process.platform === 'win32') {
+      setTimeout(() => {
+        mainWindow.focus();
+      }, 100);
+    }
+  });
+
+  // Handle blur events
+  mainWindow.on('blur', () => {
+    // Send message to renderer to handle blur
+    mainWindow.webContents.send('window-blur');
+  });
+
+  mainWindow.on('focus', () => {
+    // Send message to renderer to handle focus
+    mainWindow.webContents.send('window-focus');
   });
 
   if (isDev) {
@@ -84,16 +143,35 @@ function createWindow() {
     mainWindow = null;
   });
 
-  mainWindow.webContents.on('crashed', () => {
-    console.error('❌ Renderer crashed');
-  });
-
   mainWindow.webContents.on('did-finish-load', () => {
     if (process.platform === 'win32') {
       setTimeout(() => {
         mainWindow.focus();
         mainWindow.webContents.focus();
-      }, 200);
+      }, 300);
+    }
+  });
+
+  // Inject CSS to fix input issues
+  mainWindow.webContents.on('dom-ready', () => {
+    if (process.platform === 'win32') {
+      mainWindow.webContents.insertCSS(`
+        *:focus {
+          outline: 2px solid #0078d7 !important;
+          outline-offset: 2px !important;
+        }
+        
+        input, textarea, select {
+          -webkit-user-select: text !important;
+          user-select: text !important;
+          cursor: text !important;
+        }
+        
+        input:focus, textarea:focus, select:focus {
+          background-color: white !important;
+          border-color: #0078d7 !important;
+        }
+      `);
     }
   });
 }
@@ -127,7 +205,8 @@ function startBackendServer() {
         USER_DATA_PATH: userDataPath,
         ELECTRON_RUN_AS_NODE: '1',
         PORT: 3001
-      }
+      },
+      detached: true
     });
 
     let started = false;
@@ -156,13 +235,8 @@ function startBackendServer() {
         console.log('⚠️ Backend timeout – continuing');
         resolve();
       }
-    }, 7000);
+    }, 10000);
   });
-}
-
-if (process.platform === 'win32') {
-  app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
-  app.commandLine.appendSwitch('disable-site-isolation-trials');
 }
 
 // App lifecycle
@@ -170,8 +244,9 @@ app.on('ready', async () => {
   try {
     await startBackendServer();
     
+    // Extra delay for Windows focus handling
     if (process.platform === 'win32') {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
     
     createWindow();
@@ -182,12 +257,24 @@ app.on('ready', async () => {
 });
 
 app.on('window-all-closed', () => {
-  if (serverProcess) serverProcess.kill('SIGTERM');
+  if (serverProcess) {
+    try {
+      serverProcess.kill('SIGTERM');
+    } catch (e) {
+      console.log('Error killing server:', e);
+    }
+  }
   if (process.platform !== 'darwin') app.quit();
 });
 
 app.on('quit', () => {
-  if (serverProcess) serverProcess.kill('SIGKILL');
+  if (serverProcess) {
+    try {
+      serverProcess.kill('SIGKILL');
+    } catch (e) {
+      console.log('Error killing server:', e);
+    }
+  }
 });
 
 app.on('activate', () => {
@@ -195,8 +282,24 @@ app.on('activate', () => {
     createWindow();
   } else if (process.platform === 'win32') {
     mainWindow.show();
+    setTimeout(() => {
+      mainWindow.focus();
+      mainWindow.webContents.focus();
+    }, 200);
+  }
+});
+
+// IPC handlers for focus management
+ipcMain.on('request-focus', (event) => {
+  if (mainWindow) {
     mainWindow.focus();
     mainWindow.webContents.focus();
+  }
+});
+
+ipcMain.on('fix-input-focus', (event) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('force-input-focus');
   }
 });
 

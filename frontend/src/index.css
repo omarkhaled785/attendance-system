@@ -44,3 +44,48 @@ input, select, textarea {
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+* {
+  -webkit-user-drag: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input, textarea, select {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+  cursor: text !important;
+  outline: none !important;
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid #0078d7 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 3px rgba(0, 120, 215, 0.1) !important;
+  background-color: white !important;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="tel"],
+input[type="date"],
+input[type="email"],
+input[type="password"],
+textarea {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text !important;
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: auto !important;
+  margin: 0;
+}
+
+.modal-content input:focus,
+.modal-content textarea:focus,
+.modal-content select:focus {
+  z-index: 9999 !important;
+  position: relative !important;
+}

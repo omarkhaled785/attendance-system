@@ -14,8 +14,7 @@
     "build:win": "npm run build:frontend && electron-builder --win --x64",
     "build:linux": "npm run build:frontend && electron-builder --linux",
     "build:mac": "npm run build:frontend && electron-builder --mac",
-    "electron": "electron .",
-    "electron:dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"wait-on http://localhost:5173 && electron .\"",
+  "electron": "electron . --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-renderer-backgrounding",    "electron:dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"wait-on http://localhost:5173 && electron .\"",
     "dist": "npm run build:frontend && electron-builder"
   },
   "dependencies": {

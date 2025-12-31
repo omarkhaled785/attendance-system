@@ -24,6 +24,5 @@ npm install
 
 echo ================================
 echo Setup completed successfully
-echo Now double-click start.bat
 echo ================================
 pause

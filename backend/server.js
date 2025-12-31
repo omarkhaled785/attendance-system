@@ -455,7 +455,7 @@ app.get('/api/advances/total/:workerId', (req, res) => {
 
 app.get('/api/drivers', (req, res) => {
   try {
-    const drivers = db.prepare('SELECT * FROM drivers ORDER BY name').all();
+    const drivers = db.prepare("SELECT * FROM workers WHERE job_title = 'سواق' ORDER BY name").all();
     res.json(drivers);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -465,8 +465,8 @@ app.get('/api/drivers', (req, res) => {
 app.post('/api/drivers', (req, res) => {
   try {
     const { name, phone, license_number } = req.body;
-    const stmt = db.prepare('INSERT INTO drivers (name, phone, license_number) VALUES (?, ?, ?)');
-    const result = stmt.run(name, phone, license_number || null);
+    const stmt = db.prepare('INSERT INTO workers (name, phone, job_title) VALUES (?, ?, ?)');
+    const result = stmt.run(name, phone, 'سواق');
     res.json({ success: true, id: result.lastInsertRowid });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -491,6 +491,12 @@ app.get('/api/trips/:driverId', (req, res) => {
 app.post('/api/trips', (req, res) => {
   try {
     const { driver_id, from_location, to_location, date, notes } = req.body;
+    
+    const driver = db.prepare("SELECT * FROM workers WHERE id = ? AND job_title = 'سواق'").get(driver_id);
+    if (!driver) {
+      return res.status(404).json({ error: 'السائق غير موجود أو ليس سائقاً' });
+    }
+    
     const stmt = db.prepare('INSERT INTO trips (driver_id, from_location, to_location, date, notes) VALUES (?, ?, ?, ?, ?)');
     const result = stmt.run(driver_id, from_location, to_location, date, notes || null);
     res.json({ success: true, id: result.lastInsertRowid });
