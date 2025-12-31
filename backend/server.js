@@ -549,6 +549,10 @@ app.get('/api/workers/:id/full-report', (req, res) => {
     const { id } = req.params;
     const { year, month } = req.query;
     
+    if (!year || !month) {
+      return res.status(400).json({ error: 'يجب تحديد السنة والشهر' });
+    }
+    
     const worker = db.prepare('SELECT * FROM workers WHERE id = ?').get(id);
     if (!worker) return res.status(404).json({ error: 'Worker not found' });
 
@@ -556,6 +560,8 @@ app.get('/api/workers/:id/full-report', (req, res) => {
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
     const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+
+    console.log(`📊 Fetching full report for worker ${id} from ${startDate} to ${endDate}`);
 
     // Get attendance
     const attendance = db.prepare(`
@@ -572,9 +578,16 @@ app.get('/api/workers/:id/full-report', (req, res) => {
     `).all(id, startDate, endDate);
 
     // Calculate totals
-    const totalHours = attendance.reduce((sum, row) => sum + (parseFloat(row.total_hours) || 0), 0);
+    const totalHours = attendance.reduce((sum, row) => {
+      const hours = parseFloat(row.total_hours);
+      return sum + (isNaN(hours) ? 0 : hours);
+    }, 0);
+    
     const totalEarned = totalHours * (worker.hourly_rate || 50);
-    const totalAdvances = advances.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
+    const totalAdvances = advances.reduce((sum, row) => {
+      const amount = parseFloat(row.amount);
+      return sum + (isNaN(amount) ? 0 : amount);
+    }, 0);
     const netAmount = totalEarned - totalAdvances;
 
     // Get work days (excluding Fridays)
@@ -623,128 +636,89 @@ app.get('/api/workers/:id/full-report', (req, res) => {
 // Company invoice API
 app.get('/api/invoice/company', (req, res) => {
   try {
-    const { year, month } = req.query;
-    
-    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-    const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
-
-    // Get all workers with their attendance and advances
-    const workers = db.prepare('SELECT * FROM workers ORDER BY name').all();
-    
-    const result = [];
-    let totalHours = 0;
-    let totalEarned = 0;
-    let totalAdvances = 0;
-    
-    for (const worker of workers) {
-      // Get attendance
-      const attendance = db.prepare(`
-        SELECT * FROM attendance 
-        WHERE worker_id = ? AND date >= ? AND date <= ?
-      `).all(worker.id, startDate, endDate);
-
-      // Get advances
-      const advances = db.prepare(`
-        SELECT * FROM advances 
-        WHERE worker_id = ? AND date >= ? AND date <= ?
-      `).all(worker.id, startDate, endDate);
-
-      // Calculate totals
-      const hours = attendance.reduce((sum, row) => sum + (parseFloat(row.total_hours) || 0), 0);
-      const earned = hours * (worker.hourly_rate || 50);
-      const advancesTotal = advances.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
-      const netAmount = earned - advancesTotal;
-
-      // Add to company totals
-      totalHours += hours;
-      totalEarned += earned;
-      totalAdvances += advancesTotal;
-
-      result.push({
-        id: worker.id,
-        name: worker.name,
-        job_title: worker.job_title,
-        hourly_rate: worker.hourly_rate,
-        total_hours: hours.toFixed(2),
-        earned: earned.toFixed(2),
-        advances: advancesTotal.toFixed(2),
-        net_amount: netAmount.toFixed(2),
-        attendance_count: attendance.length
-      });
-    }
-
-    const totalNet = totalEarned - totalAdvances;
-
-    res.json({
-      period: `${month}/${year}`,
-      workers: result,
-      totalHours: totalHours.toFixed(2),
-      totalEarned: totalEarned.toFixed(2),
-      totalAdvances: totalAdvances.toFixed(2),
-      totalNet: totalNet.toFixed(2),
-      settings: db.prepare('SELECT * FROM settings WHERE id = 1').get()
-    });
-  } catch (err) {
-    console.error('Company invoice error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-// Company invoice API - Enhanced with daily, weekly, monthly, yearly support
-app.get('/api/invoice/company', (req, res) => {
-  try {
     const { year, month, date, type } = req.query;
     
     let startDate, endDate;
     
     if (type === 'daily') {
+      if (!date) {
+        return res.status(400).json({ error: 'يجب تحديد التاريخ للتقرير اليومي' });
+      }
       startDate = date;
       endDate = date;
     } else if (type === 'weekly') {
+      if (!date) {
+        return res.status(400).json({ error: 'يجب تحديد تاريخ نهاية الأسبوع' });
+      }
       const weekEnd = new Date(date);
       const weekStart = new Date(weekEnd);
       weekStart.setDate(weekStart.getDate() - 6);
       startDate = weekStart.toLocaleDateString('en-CA');
       endDate = date;
     } else if (type === 'monthly') {
+      if (!year || !month) {
+        return res.status(400).json({ error: 'يجب تحديد السنة والشهر للتقرير الشهري' });
+      }
       startDate = `${year}-${String(month).padStart(2, '0')}-01`;
       const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
       endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
     } else if (type === 'yearly') {
+      if (!year) {
+        return res.status(400).json({ error: 'يجب تحديد السنة للتقرير السنوي' });
+      }
+      // FIXED: Proper yearly data calculation
       startDate = `${year}-01-01`;
       endDate = `${year}-12-31`;
+      console.log(`📅 Yearly report from ${startDate} to ${endDate}`);
     } else {
       // Default to monthly if type not specified
+      if (!year || !month) {
+        const now = new Date();
+        year = now.getFullYear();
+        month = now.getMonth() + 1;
+      }
       startDate = `${year}-${String(month).padStart(2, '0')}-01`;
       const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
       endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
     }
 
-    // Get all workers with their attendance and advances
+    console.log(`📊 Generating ${type || 'monthly'} invoice from ${startDate} to ${endDate}`);
+
+    // Get all workers with their attendance and advances for the period
     const workers = db.prepare('SELECT * FROM workers ORDER BY name').all();
     
     const result = [];
     let totalHours = 0;
     let totalEarned = 0;
     let totalAdvances = 0;
+    let workersWithActivity = 0;
     
     for (const worker of workers) {
-      // Get attendance
+      // Get attendance for this worker in the period
       const attendance = db.prepare(`
         SELECT * FROM attendance 
         WHERE worker_id = ? AND date >= ? AND date <= ?
       `).all(worker.id, startDate, endDate);
 
-      // Get advances
+      // Get advances for this worker in the period
       const advances = db.prepare(`
         SELECT * FROM advances 
         WHERE worker_id = ? AND date >= ? AND date <= ?
       `).all(worker.id, startDate, endDate);
 
-      // Calculate totals
-      const hours = attendance.reduce((sum, row) => sum + (parseFloat(row.total_hours) || 0), 0);
+      // Calculate totals for this worker
+      const hours = attendance.reduce((sum, row) => {
+        const h = parseFloat(row.total_hours);
+        return sum + (isNaN(h) ? 0 : h);
+      }, 0);
+      
       const earned = hours * (worker.hourly_rate || 50);
-      const advancesTotal = advances.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
+      
+      const advancesTotal = advances.reduce((sum, row) => {
+        const a = parseFloat(row.amount);
+        return sum + (isNaN(a) ? 0 : a);
+      }, 0);
+      
       const netAmount = earned - advancesTotal;
 
       // Add to company totals
@@ -752,23 +726,51 @@ app.get('/api/invoice/company', (req, res) => {
       totalEarned += earned;
       totalAdvances += advancesTotal;
 
-      result.push({
-        id: worker.id,
-        name: worker.name,
-        job_title: worker.job_title,
-        hourly_rate: worker.hourly_rate,
-        total_hours: hours.toFixed(2),
-        earned: earned.toFixed(2),
-        advances: advancesTotal.toFixed(2),
-        net_amount: netAmount.toFixed(2),
-        attendance_count: attendance.length
-      });
+      // Only include workers with activity in the period
+      if (hours > 0 || advancesTotal > 0) {
+        workersWithActivity++;
+        result.push({
+          id: worker.id,
+          name: worker.name,
+          job_title: worker.job_title,
+          hourly_rate: worker.hourly_rate,
+          total_hours: hours.toFixed(2),
+          earned: earned.toFixed(2),
+          advances: advancesTotal.toFixed(2),
+          net_amount: netAmount.toFixed(2),
+          attendance_count: attendance.length,
+          advances_count: advances.length
+        });
+      }
     }
 
     const totalNet = totalEarned - totalAdvances;
 
+    // Format period text in Arabic
+    let periodText = '';
+    if (type === 'daily') {
+      periodText = new Date(date).toLocaleDateString('ar-EG', { 
+        day: 'numeric', month: 'long', year: 'numeric' 
+      });
+    } else if (type === 'weekly') {
+      const weekEnd = new Date(endDate);
+      const weekStart = new Date(startDate);
+      periodText = `${weekStart.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })} إلى ${weekEnd.toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+    } else if (type === 'monthly') {
+      const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 
+                      'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+      periodText = `${months[parseInt(month) - 1]} ${year}`;
+    } else if (type === 'yearly') {
+      periodText = `عام ${year}`;
+    } else {
+      periodText = `${month}/${year}`;
+    }
+
+    console.log(`✅ Found ${workersWithActivity} workers with activity out of ${workers.length} total workers`);
+    console.log(`📊 Total Hours: ${totalHours.toFixed(2)}, Total Earned: ${totalEarned.toFixed(2)}, Total Net: ${totalNet.toFixed(2)}`);
+
     res.json({
-      period: `${month}/${year}`, // Will be overridden by frontend
+      period: periodText,
       type: type || 'monthly',
       startDate,
       endDate,
@@ -777,10 +779,12 @@ app.get('/api/invoice/company', (req, res) => {
       totalEarned: totalEarned.toFixed(2),
       totalAdvances: totalAdvances.toFixed(2),
       totalNet: totalNet.toFixed(2),
+      workersCount: workers.length,
+      activeWorkersCount: workersWithActivity,
       settings: db.prepare('SELECT * FROM settings WHERE id = 1').get()
     });
   } catch (err) {
-    console.error('Company invoice error:', err);
+    console.error('❌ Company invoice error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -803,7 +807,94 @@ app.post('/api/backup/restore', (req, res) => {
   res.json(result);
 });
 
+// ============= API الصحة =============
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    database: 'connected'
+  });
+});
+
+// ============= API التنظيف =============
+app.post('/api/cleanup/old-data', (req, res) => {
+  try {
+    const { days } = req.body;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - (days || 365));
+    const cutoffStr = cutoffDate.toLocaleDateString('en-CA');
+    
+    // Delete old attendance records
+    const attendanceResult = db.prepare('DELETE FROM attendance WHERE date < ?').run(cutoffStr);
+    
+    // Delete old advances records
+    const advancesResult = db.prepare('DELETE FROM advances WHERE date < ?').run(cutoffStr);
+    
+    // Delete old trips records
+    const tripsResult = db.prepare('DELETE FROM trips WHERE date < ?').run(cutoffStr);
+    
+    res.json({
+      success: true,
+      deleted: {
+        attendance: attendanceResult.changes,
+        advances: advancesResult.changes,
+        trips: tripsResult.changes
+      },
+      message: `تم حذف البيانات القديمة قبل ${cutoffStr}`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============= API تصدير البيانات =============
+app.get('/api/export/data', (req, res) => {
+  try {
+    const { type } = req.query;
+    
+    let data = {};
+    
+    if (!type || type === 'all') {
+      data.workers = db.prepare('SELECT * FROM workers').all();
+      data.attendance = db.prepare('SELECT * FROM attendance').all();
+      data.advances = db.prepare('SELECT * FROM advances').all();
+      data.drivers = db.prepare('SELECT * FROM drivers').all();
+      data.trips = db.prepare('SELECT * FROM trips').all();
+      data.settings = db.prepare('SELECT * FROM settings').all();
+    } else if (type === 'workers') {
+      data = db.prepare('SELECT * FROM workers').all();
+    } else if (type === 'attendance') {
+      data = db.prepare('SELECT * FROM attendance').all();
+    } else if (type === 'advances') {
+      data = db.prepare('SELECT * FROM advances').all();
+    }
+    
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
   console.log(`📊 Database connected successfully`);
+  console.log(`📅 Today's date: ${new Date().toLocaleDateString('en-CA')}`);
+  console.log(`🔧 Available endpoints:`);
+  console.log(`   GET  /api/health - Check server health`);
+  console.log(`   GET  /api/workers - List all workers`);
+  console.log(`   GET  /api/invoice/company - Company invoice (with type parameter)`);
+  console.log(`   GET  /api/reports/daily/:date - Daily report`);
+  console.log(`   GET  /api/reports/monthly - Monthly report`);
+  console.log(`   POST /api/backup/create - Create backup`);
+});
+
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('🛑 Received SIGTERM, shutting down gracefully...');
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('🛑 Received SIGINT, shutting down gracefully...');
+  process.exit(0);
 });

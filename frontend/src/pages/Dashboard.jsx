@@ -1114,7 +1114,7 @@ const generateWorkerInvoicePDF = async (workerId) => {
                 📥 تحميل CSV
               </button>
 
-              <button 
+<button 
   onClick={() => setShowCompanyInvoice(true)} 
   className="company-invoice-btn" 
   disabled={isLoadingReport}
