@@ -1,61 +1,83 @@
-// frontend/src/utils/FocusFix.jsx
+// frontend/src/utils/FocusFix.js
 import { useEffect } from 'react';
 
 export const useFocusFix = () => {
   useEffect(() => {
-    const handleInputFocus = () => {
-      // Store the currently focused element
-      const activeElement = document.activeElement;
+    // ✅ Prevent lag by ensuring immediate input response
+    const handleInputFocus = (e) => {
+      const target = e.target;
       
-      // If it's an input/textarea, make sure it stays focusable
-      if (activeElement && (activeElement.tagName === 'INPUT' || 
-                            activeElement.tagName === 'TEXTAREA' || 
-                            activeElement.tagName === 'SELECT')) {
+      if (target && (target.tagName === 'INPUT' || 
+                      target.tagName === 'TEXTAREA' || 
+                      target.tagName === 'SELECT')) {
         
-        // Add a class to mark it as manually focused
-        activeElement.classList.add('electron-focus-fixed');
+        // Force immediate focus
+        target.style.userSelect = 'text';
+        target.style.cursor = 'text';
+        target.style.pointerEvents = 'auto';
         
-        // Ensure it's selectable
-        activeElement.style.userSelect = 'text';
-        activeElement.style.cursor = 'text';
-        
-        // Re-focus if needed
-        setTimeout(() => {
-          if (document.activeElement !== activeElement) {
-            activeElement.focus();
-            activeElement.select();
+        // Ensure it stays focused
+        requestAnimationFrame(() => {
+          if (document.activeElement !== target) {
+            target.focus();
           }
-        }, 50);
+        });
       }
     };
 
-    // Listen for focus events
-    document.addEventListener('focusin', handleInputFocus);
-    
-    // Also handle window focus events
+    // ✅ Fix click lag
+    const handleClick = (e) => {
+      const target = e.target;
+      if (target && target.tagName === 'BUTTON') {
+        target.style.pointerEvents = 'auto';
+        target.style.cursor = 'pointer';
+      }
+    };
+
+    // ✅ Handle window focus/blur
     const handleWindowFocus = () => {
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         const inputs = document.querySelectorAll('input, textarea, select');
         inputs.forEach(input => {
           input.style.userSelect = 'text';
           input.style.cursor = 'text';
+          input.style.pointerEvents = 'auto';
         });
-      }, 100);
+        
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(button => {
+          button.style.pointerEvents = 'auto';
+          button.style.cursor = 'pointer';
+        });
+      });
     };
 
+    const handleWindowBlur = () => {
+      // Don't throttle on blur
+    };
+
+    // Add event listeners
+    document.addEventListener('focusin', handleInputFocus, true);
+    document.addEventListener('click', handleClick, true);
     window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('blur', handleWindowBlur);
     
     // Initial fix
     handleWindowFocus();
 
+    // Periodic check for new elements
+    const intervalId = setInterval(handleWindowFocus, 1000);
+
     return () => {
-      document.removeEventListener('focusin', handleInputFocus);
+      document.removeEventListener('focusin', handleInputFocus, true);
+      document.removeEventListener('click', handleClick, true);
       window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('blur', handleWindowBlur);
+      clearInterval(intervalId);
     };
   }, []);
 };
 
-// Component wrapper
 export default function FocusFix({ children }) {
   useFocusFix();
   return children;

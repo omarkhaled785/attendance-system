@@ -8,20 +8,15 @@ let serverProcess;
 
 const isDev = !app.isPackaged;
 
-// Disable hardware acceleration for better compatibility
-// This must be called BEFORE app.ready
+// ✅ FIX 1: Disable hardware acceleration BEFORE app.ready
 app.disableHardwareAcceleration();
 
-// Add Windows-specific command line switches
+// ✅ FIX 2: Add these flags for better Windows compatibility
 if (process.platform === 'win32') {
-  app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
-  app.commandLine.appendSwitch('disable-site-isolation-trials');
-  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows', 'true');
-  app.commandLine.appendSwitch('disable-renderer-backgrounding');
-  app.commandLine.appendSwitch('disable-background-timer-throttling');
-  app.commandLine.appendSwitch('disable-ipc-flooding-protection');
-  app.commandLine.appendSwitch('enable-experimental-web-platform-features');
-  app.commandLine.appendSwitch('in-process-gpu');
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
+  app.commandLine.appendSwitch('disable-software-rasterizer');
+  app.commandLine.appendSwitch('no-sandbox');
 }
 
 function ensureUserDataPath() {
@@ -51,7 +46,8 @@ function createWindow() {
       offscreen: false,
       webSecurity: !isDev,
       spellcheck: false,
-      enablePreferredSizeMode: true
+      // ✅ FIX 3: Disable hardware acceleration in webPreferences too
+      hardwareAcceleration: false
     },
     show: false,
     backgroundColor: '#ffffff',
@@ -65,66 +61,56 @@ function createWindow() {
 
   mainWindow.setMenuBarVisibility(false);
   
-  // Set app user model ID for Windows taskbar
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.attendance.system');
   }
 
-  // Handle window state
+  // ✅ FIX 4: Show window immediately after ready
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
-    if (process.platform === 'win32') {
-      mainWindow.focus();
-      mainWindow.focusOnWebView();
+    mainWindow.focus();
+    
+    // Force refresh after showing
+    if (!isDev) {
+      setTimeout(() => {
+        mainWindow.webContents.reload();
+      }, 500);
     }
   });
 
-  // Prevent dev tools in production
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (!isDev && (input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i') {
       event.preventDefault();
     }
   });
 
-  // Disable context menu in production
   mainWindow.webContents.on('context-menu', (e) => {
     if (!isDev) e.preventDefault();
   });
 
-  // Fix focus issues on Windows
+  // ✅ FIX 5: Better focus management
   mainWindow.on('focus', () => {
-    if (process.platform === 'win32') {
-      setTimeout(() => {
-        mainWindow.webContents.focus();
-      }, 100);
-    }
+    mainWindow.webContents.focus();
   });
 
   mainWindow.on('restore', () => {
-    if (process.platform === 'win32') {
-      setTimeout(() => {
-        mainWindow.focus();
-        mainWindow.webContents.focus();
-      }, 200);
-    }
+    setTimeout(() => {
+      mainWindow.focus();
+      mainWindow.webContents.focus();
+    }, 100);
   });
 
   mainWindow.on('show', () => {
-    if (process.platform === 'win32') {
-      setTimeout(() => {
-        mainWindow.focus();
-      }, 100);
-    }
+    setTimeout(() => {
+      mainWindow.focus();
+    }, 50);
   });
 
-  // Handle blur events
   mainWindow.on('blur', () => {
-    // Send message to renderer to handle blur
     mainWindow.webContents.send('window-blur');
   });
 
   mainWindow.on('focus', () => {
-    // Send message to renderer to handle focus
     mainWindow.webContents.send('window-focus');
   });
 
@@ -143,36 +129,38 @@ function createWindow() {
     mainWindow = null;
   });
 
+  // ✅ FIX 6: Force repaint after load
   mainWindow.webContents.on('did-finish-load', () => {
-    if (process.platform === 'win32') {
+    if (!isDev) {
       setTimeout(() => {
-        mainWindow.focus();
-        mainWindow.webContents.focus();
-      }, 300);
+        mainWindow.webContents.invalidate();
+      }, 200);
     }
   });
 
-  // Inject CSS to fix input issues
+  // ✅ FIX 7: Inject CSS to prevent input lag
   mainWindow.webContents.on('dom-ready', () => {
-    if (process.platform === 'win32') {
-      mainWindow.webContents.insertCSS(`
-        *:focus {
-          outline: 2px solid #0078d7 !important;
-          outline-offset: 2px !important;
-        }
-        
-        input, textarea, select {
-          -webkit-user-select: text !important;
-          user-select: text !important;
-          cursor: text !important;
-        }
-        
-        input:focus, textarea:focus, select:focus {
-          background-color: white !important;
-          border-color: #0078d7 !important;
-        }
-      `);
-    }
+    mainWindow.webContents.insertCSS(`
+      * {
+        -webkit-app-region: no-drag;
+      }
+      
+      input, textarea, select, button {
+        -webkit-user-select: text !important;
+        user-select: text !important;
+        cursor: text !important;
+        pointer-events: auto !important;
+      }
+      
+      input:focus, textarea:focus, select:focus {
+        outline: 2px solid #0078d7 !important;
+        outline-offset: 1px !important;
+      }
+      
+      button {
+        cursor: pointer !important;
+      }
+    `);
   });
 }
 
@@ -239,14 +227,13 @@ function startBackendServer() {
   });
 }
 
-// App lifecycle
 app.on('ready', async () => {
   try {
     await startBackendServer();
     
-    // Extra delay for Windows focus handling
-    if (process.platform === 'win32') {
-      await new Promise(resolve => setTimeout(resolve, 800));
+    // ✅ FIX 8: Shorter delay in production
+    if (!isDev) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
     }
     
     createWindow();
@@ -280,12 +267,12 @@ app.on('quit', () => {
 app.on('activate', () => {
   if (mainWindow === null) {
     createWindow();
-  } else if (process.platform === 'win32') {
+  } else {
     mainWindow.show();
     setTimeout(() => {
       mainWindow.focus();
       mainWindow.webContents.focus();
-    }, 200);
+    }, 100);
   }
 });
 
