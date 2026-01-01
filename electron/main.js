@@ -169,77 +169,117 @@ function startBackendServer() {
   return new Promise((resolve, reject) => {
     const userDataPath = ensureUserDataPath();
     
-    // Set environment variable for backend
-    process.env.USER_DATA_PATH = userDataPath;
-
-    if (isDev) {
-      console.log('⚠️ Dev mode: backend already running');
-      return resolve();
-    }
-
-    // In production, the backend is bundled
+    // Paths for development vs production
     let serverPath;
+    let dbPath;
     
-    // Try different paths for production
-    if (app.isPackaged) {
-      // When packaged
+    if (isDev) {
+      // Development mode - use project files
+      serverPath = path.join(__dirname, '../backend/server.js');
+      dbPath = path.join(__dirname, '../attendance.db');
+    } else {
+      // Production mode - use unpacked resources
       serverPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'backend', 'server.js');
       
-      // If not found, try alternative path
-      if (!fs.existsSync(serverPath)) {
-        serverPath = path.join(__dirname, '..', 'backend', 'server.js');
+      // Database in user's app data directory
+      const dbDir = path.join(userDataPath, 'data');
+      if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true });
       }
-    } else {
-      // In development
-      serverPath = path.join(__dirname, '..', 'backend', 'server.js');
+      dbPath = path.join(dbDir, 'attendance.db');
+      
+      console.log('📁 Production paths:');
+      console.log('   Server:', serverPath);
+      console.log('   Database:', dbPath);
+      console.log('   Server exists:', fs.existsSync(serverPath));
+      console.log('   Database dir exists:', fs.existsSync(path.dirname(dbPath)));
     }
-
-    console.log('🚀 Starting backend server from:', serverPath);
-
-    // Check if file exists
+    
+    // Check if server file exists
     if (!fs.existsSync(serverPath)) {
-      console.error('❌ Backend server file not found:', serverPath);
-      reject(new Error('Backend server file not found'));
-      return;
+      console.error('❌ Server file not found:', serverPath);
+      
+      // Try alternative paths
+      const altPaths = [
+        path.join(__dirname, 'backend/server.js'),
+        path.join(process.cwd(), 'backend/server.js'),
+        path.join(path.dirname(process.execPath), 'backend/server.js')
+      ];
+      
+      for (const altPath of altPaths) {
+        if (fs.existsSync(altPath)) {
+          serverPath = altPath;
+          console.log('✅ Found server at alternative path:', serverPath);
+          break;
+        }
+      }
+      
+      if (!fs.existsSync(serverPath)) {
+        reject(new Error(`Backend server not found at any location`));
+        return;
+      }
     }
-
+    
+    console.log('🚀 Starting backend from:', serverPath);
+    
+    // Set environment variables for backend
+    const env = {
+      ...process.env,
+      NODE_ENV: isDev ? 'development' : 'production',
+      USER_DATA_PATH: userDataPath,
+      DB_PATH: dbPath,
+      ELECTRON_RUN_AS_NODE: '1',
+      PORT: '3001'
+    };
+    
+    console.log('📁 Database will be at:', dbPath);
+    
     serverProcess = spawn(process.execPath, [serverPath], {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        NODE_ENV: 'production',
-        USER_DATA_PATH: userDataPath,
-        ELECTRON_RUN_AS_NODE: '1'
-      },
-      detached: false
+      env: env,
+      detached: false,
+      shell: true
     });
-
+    
     let started = false;
-
+    let startupTimeout;
+    
     serverProcess.stdout.on('data', (data) => {
       const msg = data.toString();
-      console.log('[SERVER]', msg);
+      console.log('[SERVER]', msg.trim());
+      
       if (!started && (msg.includes('Server running') || msg.includes('3001'))) {
         started = true;
-        console.log('✅ Backend server is LIVE');
+        clearTimeout(startupTimeout);
+        console.log('✅ Backend server is LIVE on port 3001');
         resolve();
       }
     });
-
+    
     serverProcess.stderr.on('data', (data) => {
-      console.error('[SERVER ERROR]', data.toString());
+      console.error('[SERVER ERROR]', data.toString().trim());
     });
-
+    
     serverProcess.on('error', (err) => {
-      console.error('❌ Backend failed:', err);
+      console.error('❌ Backend failed to start:', err);
+      clearTimeout(startupTimeout);
       reject(err);
     });
-
-    // Timeout after 30 seconds
-    setTimeout(() => {
+    
+    serverProcess.on('exit', (code) => {
+      console.log(`Backend exited with code ${code}`);
       if (!started) {
-        console.log('⚠️ Backend timeout – assuming it started');
-        resolve();
+        clearTimeout(startupTimeout);
+        reject(new Error(`Backend exited with code ${code}`));
+      }
+    });
+    
+    // Timeout after 30 seconds
+    startupTimeout = setTimeout(() => {
+      if (!started) {
+        console.log('⚠️ Backend startup timeout - assuming it started');
+        serverProcess.kill('SIGTERM');
+        reject(new Error('Backend startup timeout'));
       }
     }, 30000);
   });

@@ -13,12 +13,15 @@
 
     "build:frontend": "vite build",
 
-    "build": "npm run build:frontend && electron-builder",
+    "build": "npm run build:frontend && electron-builder --win",
 
-    "dist": "npm run build:frontend && electron-builder",
+    "dist": "npm run build:frontend && electron-builder --win",
 
     "electron": "electron .",
-    "electron:dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"wait-on http://localhost:5173 && electron .\""
+    "electron:dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"wait-on http://localhost:5173 && electron .\"",
+    
+    "pack": "npm run build:frontend && electron-builder --dir",
+    "postinstall": "electron-builder install-app-deps"
   },
 
   "dependencies": {
@@ -49,33 +52,43 @@
   "build": {
     "appId": "com.attendance.system",
     "productName": "نظام الحضور والانصراف",
-
+    "copyright": "Copyright © 2024",
+    
     "directories": {
-    "output": "dist",
-          "buildResources": "build"
+      "output": "dist",
+      "buildResources": "build"
     },
-
+    
     "asar": true,
     "asarUnpack": [
-      "backend/**",
-      "node_modules/better-sqlite3/**"
+      "backend/**/*",
+      "node_modules/better-sqlite3/**/*"
     ],
 
     "files": [
       "electron/**/*",
-      "backend/**/*",
       "frontend/dist/**/*",
       "package.json",
-      "icon.png",
-      "icon.ico",
-          "!backend/node_modules/**/*"
+      "!backend",
+      "!frontend/src",
+      "!frontend/public",
+      "!node_modules"
     ],
 
     "extraResources": [
       {
         "from": "backend",
         "to": "backend",
-      "filter": ["**/*", "!node_modules"]      }
+        "filter": ["**/*"]
+      },
+      {
+        "from": "icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "icon.png",
+        "to": "icon.png"
+      }
     ],
 
     "win": {
@@ -85,34 +98,34 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "icon.ico"
+      "icon": "build/icon.ico",
+      "publisherName": "Your Company"
     },
 
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "allowElevation": true,
-
+      "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "نظام الحضور والانصراف",
-
-      "installerIcon": "icon.ico",
-      "uninstallerIcon": "icon.ico",
-
-      "language": "1025",
-      "displayLanguageSelector": false
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "menuCategory": "نظام الحضور والانصراف"
     },
 
     "linux": {
       "target": ["AppImage", "deb"],
-      "icon": "icon.png",
+      "icon": "build/icon.png",
       "category": "Office"
     },
 
     "mac": {
       "target": ["dmg"],
-      "icon": "icon.icns",
+      "icon": "build/icon.icns",
       "category": "public.app-category.business"
     }
   }
