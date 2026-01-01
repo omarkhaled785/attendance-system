@@ -51,8 +51,8 @@
     "productName": "نظام الحضور والانصراف",
 
     "directories": {
-      "output": "dist-electron",
-      "buildResources": "build"
+    "output": "dist",
+          "buildResources": "build"
     },
 
     "asar": true,
@@ -67,15 +67,15 @@
       "frontend/dist/**/*",
       "package.json",
       "icon.png",
-      "icon.ico"
+      "icon.ico",
+          "!backend/node_modules/**/*"
     ],
 
     "extraResources": [
       {
         "from": "backend",
         "to": "backend",
-        "filter": ["**/*"]
-      }
+      "filter": ["**/*", "!node_modules"]      }
     ],
 
     "win": {

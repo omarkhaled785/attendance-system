@@ -3,17 +3,31 @@ const path = require('path');
 const fs = require('fs');
 
 function getDatabasePath() {
-  const customPath = process.env.USER_DATA_PATH;
-  if (customPath) {
-    const dbDir = customPath;
-    if (!fs.existsSync(dbDir)) {
-      fs.mkdirSync(dbDir, { recursive: true });
-    }
-    const finalPath = path.join(dbDir, 'attendance.db');
-    console.log('PROD DB PATH:', finalPath);
-    return finalPath;
+  let dbDir;
+  
+  if (process.env.NODE_ENV === 'development') {
+    // For development, use project root
+    dbDir = path.join(__dirname, '..');
+  } else {
+    const appData = process.env.APPDATA || 
+                    (process.platform === 'darwin' ? 
+                      path.join(process.env.HOME, 'Library/Application Support') : 
+                      path.join(process.env.HOME, '.local/share'));
+    
+    dbDir = path.join(appData, 'attendance-system');
   }
-  return path.join(__dirname, '../attendance.db');
+  
+  // Ensure directory exists
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+  
+  const dbPath = path.join(dbDir, 'attendance.db');
+  console.log('📁 Database path:', dbPath);
+  console.log('📁 Full path:', dbPath);
+  console.log('📁 Directory exists:', fs.existsSync(dbDir));
+  
+  return dbPath;
 }
 
 const dbPath = getDatabasePath();

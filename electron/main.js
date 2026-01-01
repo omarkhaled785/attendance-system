@@ -168,23 +168,40 @@ function createWindow() {
 function startBackendServer() {
   return new Promise((resolve, reject) => {
     const userDataPath = ensureUserDataPath();
+    
+    // Set environment variable for backend
+    process.env.USER_DATA_PATH = userDataPath;
 
     if (isDev) {
       console.log('⚠️ Dev mode: backend already running');
       return resolve();
     }
 
-    let serverPath = path.join(
-      process.resourcesPath,
-      'app.asar.unpacked/backend/server.js'
-    );
-
-    if (!fs.existsSync(serverPath)) {
-      serverPath = path.join(app.getAppPath(), 'backend/server.js');
+    // In production, the backend is bundled
+    let serverPath;
+    
+    // Try different paths for production
+    if (app.isPackaged) {
+      // When packaged
+      serverPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'backend', 'server.js');
+      
+      // If not found, try alternative path
+      if (!fs.existsSync(serverPath)) {
+        serverPath = path.join(__dirname, '..', 'backend', 'server.js');
+      }
+    } else {
+      // In development
+      serverPath = path.join(__dirname, '..', 'backend', 'server.js');
     }
 
-    console.log('🚀 Starting backend server...');
-    console.log('📂 Server path:', serverPath);
+    console.log('🚀 Starting backend server from:', serverPath);
+
+    // Check if file exists
+    if (!fs.existsSync(serverPath)) {
+      console.error('❌ Backend server file not found:', serverPath);
+      reject(new Error('Backend server file not found'));
+      return;
+    }
 
     serverProcess = spawn(process.execPath, [serverPath], {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -192,10 +209,9 @@ function startBackendServer() {
         ...process.env,
         NODE_ENV: 'production',
         USER_DATA_PATH: userDataPath,
-        ELECTRON_RUN_AS_NODE: '1',
-        PORT: 3001
+        ELECTRON_RUN_AS_NODE: '1'
       },
-      detached: true
+      detached: false
     });
 
     let started = false;
@@ -219,12 +235,13 @@ function startBackendServer() {
       reject(err);
     });
 
+    // Timeout after 30 seconds
     setTimeout(() => {
       if (!started) {
-        console.log('⚠️ Backend timeout – continuing');
+        console.log('⚠️ Backend timeout – assuming it started');
         resolve();
       }
-    }, 10000);
+    }, 30000);
   });
 }
 
